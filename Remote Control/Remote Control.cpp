@@ -40,11 +40,12 @@ int main()
             //套接字初始化：
             CServerSocket* pserver = CServerSocket::getInstance(); //得到单例server对象
             int count = 0;
+            if (pserver->InitSocket() == false) {
+                MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
+                exit(0);
+            }
             while (pserver) {
-                if (pserver->InitSocket() == false) {
-                    MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
-                    exit(0);
-                }
+
                 if (pserver->AcceptClient() == false) {
                     if (count >= 3) {
                         MessageBox(NULL, _T("重试失败，结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);

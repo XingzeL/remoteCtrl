@@ -2,6 +2,80 @@
 #include "pch.h"
 #include "framework.h"
 
+class CPacket {
+public:
+	CPacket():sHead(0), nLength(0), sCmd(0), sSum(0) {}
+
+	CPacket(const CPacket& pack) {
+		sHead = pack.sHead;
+		nLength = pack.nLength;
+		sCmd = pack.sCmd;
+		strData = pack.strData;
+		sSum = pack.sSum;
+	}
+
+	CPacket(const BYTE* pData, size_t& nSize) {
+		//用于解析数据的构造函数
+		size_t i;
+		for (i = 0; i < nSize; i++) {
+			if (*(WORD*)(pData + i) == 0xFEFF) {
+				sHead = *(WORD*)(pData + i);
+				i += 2; //如果只有包头后面没有东西的情况可以进入return的分支
+				break;
+			}
+		}
+		if (i + 4 + 2 + 2> nSize) { //有的包没有数据，就是一个命令，也可以进行解析
+			//没有包头，或者只有包头(数据不全)
+			nSize = 0;
+			return;
+		}
+		//说明有包头且后面有数据
+		nLength = *(DWORD*)(pData + i); i += 4; //取到包的长度
+		if (nLength + i > nSize) {
+			//说明包没有完全接收到，就返回，解析失败
+			nSize = 0;
+			return;
+		}
+		sCmd = *(WORD*)(pData + i); i += 2;
+		if (nLength > 4) {
+			strData.resize(nLength - 2 - 2);
+			memcpy((void*)strData.c_str(), pData + i, nLength - 4);
+			i += nLength - 4;
+		}
+		sSum = *(WORD*)(pData + i); i += 2;
+		//进行校验
+		WORD sum = 0;
+		for (int j = 0; j < strData.size(); j++) {
+			sum += BYTE(strData[i]) & 0xFF;
+		}
+		if (sum == sSum) {
+			nSize = i; //head2 length4 data...  i就是实际从缓冲区读了的size
+			return;
+		}
+		//解析失败的情况
+		nSize = 0;
+		return;
+	}
+
+	CPacket& operator=(const CPacket& pack) {
+		if (this != &pack) { //这样可以连等
+			sHead = pack.sHead;
+			nLength = pack.nLength;
+			sCmd = pack.sCmd;
+			strData = pack.strData;
+			sSum = pack.sSum;
+		}
+		return *this;
+	}
+
+	~CPacket() {}
+public:
+	WORD sHead; //包头外部需要使用， 固定为FEFF
+	DWORD nLength;
+	WORD sCmd; //远控命令
+	std::string strData; //包数据
+	WORD sSum; //和校验
+};
 
 class CServerSocket
 {
@@ -32,26 +106,40 @@ public:
 
 	bool AcceptClient() {
 		sockaddr_in client_adr;
-		int cli_sz = sizeof(m_sock);
+		int cli_sz = sizeof(client_adr); //fault1: 是adr的size，写成了sock的size导致accept直接返回-1
 		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
 		if (m_client == -1) return false;
-		char buffer[1024];
+		//char buffer[1024];
 		//recv(m_sock, buffer, sizeof(buffer), 0);
 		//send(m_sock, buffer, sizeof(buffer), 0);
 		//closesocket(m_sock);
 		return true;
 	}
 
+#define BUFFERSIZE 4096
 	int DealCommand() {
 		if (m_client == -1) return false;
-		char buffer[1024] = "";
+		//char buffer[1024] = "";
+		char* buffer = new char[BUFFERSIZE];
+		memset(buffer, 0, BUFFERSIZE);
+		size_t index = 0;
 		while (true) {
-			int len = recv(m_client, buffer, sizeof(buffer), 0);
+			size_t len = recv(m_client, buffer + index, BUFFERSIZE - index, 0);
 			if (len <= 0) {
 				return -1;
 			}
-			//TODO: 处理客户端的commands
+
+			index += len;
+			len = index;
+			m_packet = CPacket((BYTE*)buffer, len); //这里可能会改变len
+			if (len > 0) {
+				//解析成功，输出
+				memmove(buffer, buffer + len, BUFFERSIZE - len); //将剩余的数据移动到缓冲的头步m_packet
+				index -= len; //注意：上面的len和这里的len可能不同，因为读到了2000字节可能1000个字节是一个包，先解析一个包，把剩余数据移到前面，让index变化
+				return m_packet.sCmd;
+			}
 		}
+		return -1; //意外情况
 	}
 
 	bool Send(const char* pData, int nSize) {
@@ -63,9 +151,10 @@ private:
 
 	SOCKET m_sock;
 	SOCKET m_client;
+	CPacket m_packet;
 	//单例模式：将构造和析构函数作为private
 	//拷贝构造
-	CServerSocket(const CServerSocket&) {}
+	CServerSocket(const CServerSocket& ss) {}
 	CServerSocket& operator=(const CServerSocket& ss) {
 		m_sock = ss.m_sock;
 		m_client = ss.m_client;
@@ -120,4 +209,4 @@ private:
 	static CHelper m_helper;
 };
 
-extern CServerSocket server; //定义在.cpp文件中
+//extern CServerSocket server; //定义在.cpp文件中
