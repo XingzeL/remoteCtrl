@@ -2,9 +2,24 @@
 #include "pch.h"
 #include "framework.h"
 
+#pragma pack(push)
+#pragma pack(1)
 class CPacket {
 public:
 	CPacket():sHead(0), nLength(0), sCmd(0), sSum(0) {}
+
+	//打包的重构
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+		sHead = 0xFEFF;
+		nLength = nSize + 4;
+		sCmd = nCmd;
+		strData.resize(nSize);
+		memcpy((void*)strData.c_str(), pData, nSize);
+		sSum = 0;
+		for (size_t j = 0; j < strData.size(); j++) {
+			sSum += BYTE(strData[j]) & 0xFF;
+		}
+	}
 
 	CPacket(const CPacket& pack) {
 		sHead = pack.sHead;
@@ -46,7 +61,7 @@ public:
 		//进行校验
 		WORD sum = 0;
 		for (int j = 0; j < strData.size(); j++) {
-			sum += BYTE(strData[i]) & 0xFF;
+			sum += BYTE(strData[j]) & 0xFF;
 		}
 		if (sum == sSum) {
 			nSize = i; //head2 length4 data...  i就是实际从缓冲区读了的size
@@ -68,6 +83,22 @@ public:
 		return *this;
 	}
 
+	int Size() { //包数据的大小
+		return nLength + 6;
+	}
+
+	const char* Data() {
+		strOut.resize(nLength + 6);
+		BYTE* pData = (BYTE*)strOut.c_str();
+		//填数据
+		*(WORD*)pData = sHead; pData += 2;
+		*(DWORD*)(pData) = nLength; pData += 4;
+		*(WORD*)pData = sCmd; pData += 2;
+		memcpy(pData, strData.c_str(), strData.size()); pData += strData.size();
+		*(WORD*)pData = sSum;
+		return strOut.c_str();
+	}
+
 	~CPacket() {}
 public:
 	WORD sHead; //包头外部需要使用， 固定为FEFF
@@ -75,7 +106,9 @@ public:
 	WORD sCmd; //远控命令
 	std::string strData; //包数据
 	WORD sSum; //和校验
+	std::string strOut; //整个包的数据
 };
+#pragma pack(pop)
 
 class CServerSocket
 {
@@ -143,7 +176,13 @@ public:
 	}
 
 	bool Send(const char* pData, int nSize) {
+		if (m_client == -1) return false;
 		return send(m_client, pData, nSize, 0) > 0;
+	}
+
+	bool Send(CPacket& pack) {
+		if (m_client == -1) return false;
+		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
 
 
