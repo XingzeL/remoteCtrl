@@ -119,6 +119,57 @@ int MakeDirectoryInfo() {
     return 0;
 }
 
+int RunFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    CPacket pack(3, NULL, 0);
+    if (CServerSocket::getInstance()->Send(pack) == false) {
+        OutputDebugString(_T("包发送失败"));
+        return -4;
+    }
+    return 0;
+}
+
+#pragma warning(disable:4966) //会降级fopen, sprintf, strcpy, strstr等函数的安全提醒从error到warning
+int DownloadFile() { //控制端要下载，服务端进行上传
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath); 
+    long long data = 0;  //用于放文件的长度
+
+    FILE* pFile = NULL;
+    errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");
+    //FILE* pFile = fopen(strPath.c_str(), "rb"); //会因为跨平台而报错，是安全问题的warning被提升成error的原因
+    //fopen_s: 待验证的open，当出现多个进程读同一个文件时，可能得到句柄不为空但是读不到数据的情况
+    if (err != 0) {
+        CPacket pack(4, (BYTE*)&data, 8); //告诉对方文件长度为0，相当于读不了
+        if (CServerSocket::getInstance()->Send(pack) == false) {
+            OutputDebugString(_T("包发送失败"));
+            return -4;
+        }
+        return -1;
+    }
+    if (pFile != NULL) {
+        fseek(pFile, 0, SEEK_END); //将文件指针进行一次偏移
+        data = _ftelli64(pFile); //拿文件的长度
+        CPacket head(4, (BYTE*)&data, 8);
+        fseek(pFile, 0, SEEK_SET); //将文件指针偏移重置回开头
+
+        char buffer[1024] = "";
+        size_t rlen = 0;
+        do {
+            rlen = fread(buffer, 1, 1024, pFile);
+            CPacket pack(4, (BYTE*)buffer, rlen);
+            CServerSocket::getInstance()->Send(pack);
+        } while (rlen >= 1024); //小于的话说明读到尾巴了
+
+        fclose(pFile);
+    }
+    CPacket pack(4, NULL, 0); //发送回去一个消息，表示读完了，对面也能根据文件的长度判断文件是否完整
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -154,6 +205,12 @@ int main()
                 break;
             case 2: //查看指定目录下的文件
                 MakeDirectoryInfo();
+                break;
+            case 3:
+                RunFile();
+                break;
+            case 4:
+                DownloadFile();
                 break;
             }
             
