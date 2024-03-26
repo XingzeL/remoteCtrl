@@ -185,6 +185,14 @@ public:
 		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
 
+	bool GetFilePath(std::string& strPath) {
+		//获取文件列表
+		if (m_packet.sCmd == 2) {
+			strPath = m_packet.strData;
+			return true;
+		}
+		return false;
+	}
 
 private: 
 
