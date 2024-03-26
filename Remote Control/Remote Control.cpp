@@ -6,6 +6,7 @@
 #include "Remote Control.h"
 #include "ServerSocket.h"
 #include <direct.h>
+#include <atlimage.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -271,6 +272,45 @@ int MouseEvent() {
     return 0;
 }
 
+int SendScreen() {
+    CImage screen;
+    HDC hScreen = ::GetDC(NULL); //得到设备上下文,返回给屏幕句柄
+    int nBitPerPixel = GetDeviceCaps(hScreen, BITSPIXEL); //用多少个bit表示颜色
+    int nWidth = GetDeviceCaps(hScreen, HORZRES); //水平的
+    int nHeight = GetDeviceCaps(hScreen, VERTRES); //垂直，拿到高
+    screen.Create(nWidth, nHeight, nBitPerPixel); //创建一个截图
+    BitBlt(screen.GetDC(), 0, 0, 2560, 1400, hScreen, 0, 0, SRCCOPY);
+    ReleaseDC(NULL, hScreen);
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);
+    if (hMem == NULL) return -1;
+    IStream* pStream = NULL;
+    //用Save的流的重载保存到内存中
+    HRESULT ret = CreateStreamOnHGlobal(hMem, TRUE, &pStream);
+    if (ret == S_OK) {
+        screen.Save(pStream, Gdiplus::ImageFormatPNG); //将内容保存到流（缓冲区中）
+        //stream可以用seek来调整流指针
+        LARGE_INTEGER bg = { 0 };
+        pStream->Seek(bg, STREAM_SEEK_SET, NULL); //重新移到开头
+        PBYTE pData = (PBYTE)GlobalLock(hMem);
+
+        SIZE_T nSize = GlobalSize(hMem);
+        CPacket pack(6, pData, nSize);
+        CServerSocket::getInstance()->Send(pack);
+        GlobalUnlock(hMem);
+    }
+    pStream->Release();
+    //DWORD tick = GetTickCount64(); //获得当前tick值
+    //screen.Save(_T("test1.png"), Gdiplus::ImageFormatPNG); //保存到文件中
+    //TRACE("png %d\r\n", GetTickCount64() - tick); //30-50ms，慢但是带宽需求少
+
+    //tick = GetTickCount64();
+    //screen.Save(_T("test1.jpg"), Gdiplus::ImageFormatJPEG);
+    //TRACE("jpg %d\r\n", GetTickCount64() - tick); //16ms，快但是需要带宽
+    screen.ReleaseDC(); //注意释放上下文，注释掉后运行会在析构处报错
+    GlobalFree(hMem);
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -299,7 +339,7 @@ int main()
             //    exit(0);
             //}
             //while (pserver) {
-            int nCmd = 1;
+            int nCmd = 6;
             switch (nCmd) {
             case 1: //查看磁盘分区
                 MakeDriverInfo();
@@ -315,6 +355,9 @@ int main()
                 break;
             case 5: //鼠标操作
                 MouseEvent();
+                break;
+            case 6: //发送屏幕内容 本质：发送屏幕的截图
+                SendScreen();
                 break;
 
             }
