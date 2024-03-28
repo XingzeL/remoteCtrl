@@ -281,7 +281,7 @@ int SendScreen() {
     screen.Create(nWidth, nHeight, nBitPerPixel); //创建一个截图
     BitBlt(screen.GetDC(), 0, 0, 2560, 1400, hScreen, 0, 0, SRCCOPY);
     ReleaseDC(NULL, hScreen);
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0); 
     if (hMem == NULL) return -1;
     IStream* pStream = NULL;
     //用Save的流的重载保存到内存中
@@ -311,6 +311,81 @@ int SendScreen() {
     return 0;
 }
 
+#include "LockDialog.h"
+CLockDialog dig;
+unsigned threadId = 0;
+
+unsigned __stdcall threadLockDlg(void* arg) {
+    TRACE("%s(%d):%d\r\n", __FUNCTION__, __LINE__, GetCurrentThreadId());
+    dig.Create(IDD_DIALOG_INFO, NULL); //创建窗口
+    dig.ShowWindow(SW_SHOW);
+
+    //窗口制定，遮蔽后面的内容
+    CRect rect;
+    rect.left = 0;
+    rect.top = 0;
+    rect.right = GetSystemMetrics(SM_CXFULLSCREEN) / 2;
+    rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN) / 2;
+    dig.MoveWindow(rect);
+    dig.SetWindowPos(&dig.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE); //没有消息循环的话会立马消失
+
+    TRACE("right = %d bottom = %d/r/n", rect.right, rect.bottom);
+    //dig.GetWindowRect(rect); //获取窗口范围
+
+    ShowCursor(false); //在窗口内就不会出现鼠标
+    //::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_HIDE); //隐藏任务栏
+    rect.left = 0;
+    rect.top = 0;
+    rect.right = 1;
+    rect.bottom = 1;
+    //ClipCursor(rect); //将鼠标限制在窗口范围内，只有一个像素点
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) { //对话框依赖消息循环
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        if (msg.message == WM_KEYDOWN) { //接收到按键就释放
+            TRACE("msg::%08X wparam:%08x lparam:%08X/r/n", msg.message, msg.wParam, msg.lParam);
+            if (msg.wParam == 0x1B) { //是esc键的时候
+                break;
+            }
+
+        }
+    }
+    dig.DestroyWindow(); //和上面的Create成对
+    ShowCursor(true);
+    ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW); //恢复任务栏
+    _endthreadex(0);
+    return 0;
+}
+
+int LockMachine() { 
+    //需要弹出一个消息：“请联系管理员” 显示在最顶层
+    //模态还是非模态 没有模态基础，因为隐藏了命令框
+
+    //如果是空或者无效就开启线程
+    if ((dig.m_hWnd == NULL) || (dig.m_hWnd == INVALID_HANDLE_VALUE)) {
+        //_beginthread(threadLockDlg, 0, NULL); //启动一个新的线程，自己不阻塞，不然就收不到别的消息了
+        _beginthreadex(NULL, 0, threadLockDlg, NULL, 0, &threadId);
+        TRACE("threadId = %d\r\n", threadId);
+    }
+
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int UnLockMachine() {
+    //dig.SendMessage(WM_KEYDOWN, 0x41, 0x01E0001);  //给对象送消息
+    //::SendMessage(dig.m_hWnd, WM_KEYDOWN, 0x41, 0x01E0001); //全局送消息
+    //！：以上两种送消息的方式都不会被另一个线程收到
+    PostThreadMessage(threadId, WM_KEYDOWN, 0x1B, 0); //需要threadID
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+
 int main()
 {
     int nRetCode = 0;
@@ -339,7 +414,8 @@ int main()
             //    exit(0);
             //}
             //while (pserver) {
-            int nCmd = 6;
+            
+            int nCmd = 7;
             switch (nCmd) {
             case 1: //查看磁盘分区
                 MakeDriverInfo();
@@ -359,9 +435,22 @@ int main()
             case 6: //发送屏幕内容 本质：发送屏幕的截图
                 SendScreen();
                 break;
+            case 7: //锁机
+                LockMachine();
+                Sleep(50);
+                LockMachine(); //测试收到多次锁机命令
+                break;
 
+            case 8:
+                UnLockMachine();
+                break;
             }
-            
+            Sleep(5000);
+            UnLockMachine();
+            while ((dig.m_hWnd != NULL) && (dig.m_hWnd != INVALID_HANDLE_VALUE)) {
+                //Window还有效，等待,不然会在退出的时候报错，因为没有同步
+                Sleep(100);
+            }
             //    if (pserver->AcceptClient() == false) {
             //        if (count >= 3) {
             //            MessageBox(NULL, _T("重试失败，结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
