@@ -9,7 +9,8 @@
 #include "afxdialogex.h"
 
 #include "ClientSocket.h"
-
+#include <atlstr.h> // 包含 CString 相关的头文件
+#include <stdlib.h> // 包含 atoi 函数的头文件
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -54,6 +55,8 @@ END_MESSAGE_MAP()
 
 CRemoteClientDlg::CRemoteClientDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_REMOTECLIENT_DIALOG, pParent)
+	, m_server_address(0)
+	, m_nPort(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -61,6 +64,8 @@ CRemoteClientDlg::CRemoteClientDlg(CWnd* pParent /*=nullptr*/)
 void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_IPAddress(pDX, IDC_IPADDRESSCTRL, m_server_address);
+	DDX_Text(pDX, IDC_PORTCTRL, m_nPort);
 }
 
 BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
@@ -105,6 +110,10 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO: 在此添加额外的初始化代码
+	UpdateData();
+	m_server_address = 0x7f000001; //本地回环
+	m_nPort = _T("9527");
+	UpdateData(FALSE);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -162,9 +171,12 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 
 void CRemoteClientDlg::OnBnClickedButton1()
 {
-	// TODO: 在此添加控件通知处理程序代码
+	UpdateData(); //更新界面的一些数据
+	m_server_address;
+	int port = _tstoi(m_nPort); //MFC中转换CString到int
+
 	CClientSocket* pClient = CClientSocket::getInstance();
-	int ret = pClient->InitSocket("127.0.0.1"); //就会进行连接
+	int ret = pClient->InitSocket(m_server_address, port); //就会进行连接
 	
 	if (!ret) {
 		AfxMessageBox(_T("网络初始化失败"));

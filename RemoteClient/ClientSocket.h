@@ -146,7 +146,7 @@ public:
 		return m_instance;
 	}
 
-	bool InitSocket(const std::string& strIPAddress) {
+	bool InitSocket(int nIp, int port) {
 		//修改的bug：因为每次送消息都会关闭连接，client不能像server一样socket只初始化一次
 		// 每次Inite都要初始化m_sock
 		
@@ -157,8 +157,10 @@ public:
 		sockaddr_in serv_adr;
 		memset(&serv_adr, 0, sizeof(serv_adr));
 		serv_adr.sin_family = AF_INET;
-		serv_adr.sin_addr.s_addr = inet_addr(strIPAddress.c_str());
-		serv_adr.sin_port = htons(9527);
+		//serv_adr.sin_addr.s_addr = inet_addr("127.0.0.1");
+		//TRACE("addr: %08X nIP %08X\r\n", serv_adr.sin_addr.s_addr, nIp);
+		serv_adr.sin_addr.s_addr = htonl(nIp);
+		serv_adr.sin_port = htons(port);
 		//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
 		// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
 		
