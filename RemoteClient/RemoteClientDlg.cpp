@@ -8,6 +8,8 @@
 #include "RemoteClientDlg.h"
 #include "afxdialogex.h"
 
+#include "ClientSocket.h"
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -65,6 +67,9 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_BUTTON1, &CRemoteClientDlg::OnBnClickedButton1)
+	ON_BN_CLICKED(IDC_BUTTON2, &CRemoteClientDlg::OnBnClickedButton2)
+
 END_MESSAGE_MAP()
 
 
@@ -151,5 +156,35 @@ void CRemoteClientDlg::OnPaint()
 HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
+}
+
+
+
+void CRemoteClientDlg::OnBnClickedButton1()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	CClientSocket* pClient = CClientSocket::getInstance();
+	int ret = pClient->InitSocket("127.0.0.1"); //就会进行连接
+	
+	if (!ret) {
+		AfxMessageBox(_T("网络初始化失败"));
+		return;
+	}
+
+	CPacket pack(9, NULL, 0);
+	ret = pClient->Send(pack);
+	TRACE("Send ret %d\r\n", ret);
+	pClient->DealCommand(); //去接收
+	TRACE("ack: %d\r\n", pClient->GetPack().sCmd);
+	pClient->CloseSocket();
+	//CPacket pack;
+	//pClient->Send(pack);
+}
+
+
+void CRemoteClientDlg::OnBnClickedButton2()
+{
+	// TODO: 在此添加控件通知处理程序代码
+
 }
 

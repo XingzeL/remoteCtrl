@@ -385,92 +385,91 @@ int UnLockMachine() {
     return 0;
 }
 
-
-int main()
-{
-    int nRetCode = 0;
+int TestConncet() {
+    CPacket pack(9, NULL, 0);
     
-    HMODULE hModule = ::GetModuleHandle(nullptr);
-    //CServerSocket::m_helper; 私有的不可访问
+    bool ret = CServerSocket::getInstance()->Send(pack);
+    TRACE("服务端发送ret: %d\r\n",ret);
+    return 0;
+}
 
-    if (hModule != nullptr)
-    {
-        // 初始化 MFC 并在失败时显示错误
-        if (!AfxWinInit(hModule, nullptr, ::GetCommandLine(), 0))
-        {
-            // TODO: 在此处为应用程序的行为编写代码。
+int ExecuteCommd(int nCmd) {
+    int ret = 0;
+    switch (nCmd) {
+    case 1: //查看磁盘分区
+        ret = MakeDriverInfo();
+        break;
+    case 2: //查看指定目录下的文件
+        ret = MakeDirectoryInfo();
+        break;
+    case 3:
+        ret = RunFile();
+        break;
+    case 4:
+        ret = DownloadFile();
+        break;
+    case 5: //鼠标操作
+        ret = MouseEvent();
+        break;
+    case 6: //发送屏幕内容 本质：发送屏幕的截图
+        ret = SendScreen();
+        break;
+    case 7: //锁机
+        ret = LockMachine();
+        break;
+
+    case 8:
+        ret = UnLockMachine();
+        break;
+    case 9:
+        ret = TestConncet();
+        break;
+    }
+
+    return ret;
+}
+
+int main() {
+    int nRetCode = 0;
+
+    HMODULE hModule = ::GetModuleHandle(nullptr);
+
+    if (hModule != nullptr) {
+        if (!AfxWinInit(hModule, nullptr, ::GetCommandLine(), 0)) {
             wprintf(L"错误: MFC 初始化失败\n");
             nRetCode = 1;
         }
-        else
-        {   //1. 先做技术更难的一端，控制难度曲线得到更可控的进度先验预估
-            // 整个项目进度的把握，与谁进行对接，进度的反馈形式 项目完成的预估 
-            // TODO: socket, bind, listen, accept, read, write, close
-            //套接字初始化：
-            //CServerSocket* pserver = CServerSocket::getInstance(); //得到单例server对象
-            //int count = 0;
-            //if (pserver->InitSocket() == false) {
-            //    MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
-            //    exit(0);
-            //}
-            //while (pserver) {
-            
-            int nCmd = 7;
-            switch (nCmd) {
-            case 1: //查看磁盘分区
-                MakeDriverInfo();
-                break;
-            case 2: //查看指定目录下的文件
-                MakeDirectoryInfo();
-                break;
-            case 3:
-                RunFile();
-                break;
-            case 4:
-                DownloadFile();
-                break;
-            case 5: //鼠标操作
-                MouseEvent();
-                break;
-            case 6: //发送屏幕内容 本质：发送屏幕的截图
-                SendScreen();
-                break;
-            case 7: //锁机
-                LockMachine();
-                Sleep(50);
-                LockMachine(); //测试收到多次锁机命令
-                break;
-
-            case 8:
-                UnLockMachine();
-                break;
+        else {
+            CServerSocket* pserver = CServerSocket::getInstance();
+            int count = 0;
+            if (pserver->InitSocket() == false) {
+                MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
+                exit(0);
             }
-            Sleep(5000);
-            UnLockMachine();
-            while ((dig.m_hWnd != NULL) && (dig.m_hWnd != INVALID_HANDLE_VALUE)) {
-                //Window还有效，等待,不然会在退出的时候报错，因为没有同步
-                Sleep(100);
+            while (pserver) {
+                if (pserver->AcceptClient() == false) {
+                    if (count >= 3) {
+                        MessageBox(NULL, _T("多次无法正常进入用户，结束程序！"), _T("网络初始化失败"), \
+                            MB_OK | MB_ICONERROR);
+                        exit(0);
+                    }
+                    MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), \
+                        MB_OK | MB_ICONERROR);
+                    count++;
+                }
+                int ret = pserver->DealCommand();
+                if (ret != -1) {
+                    ret = ExecuteCommd(pserver->GetPacket().sCmd);
+                    if (ret != 0) {
+                        TRACE("执行命令失败，%d ret = %d\r\n", pserver->GetPacket().sCmd, ret);
+                    }
+                    pserver->CloseClient();
+                    TRACE("Command has done\r\n");
+                }
             }
-            //    if (pserver->AcceptClient() == false) {
-            //        if (count >= 3) {
-            //            MessageBox(NULL, _T("重试失败，结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-            //            exit(0);
-            //        }
-            //        MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-            //        count++;
-            //        //exit(0);
-            //    }
-            //    int ret = pserver->DealCommand();
-            //    //TODO
-            //}
-           
-
-            //全局静态变量：会在main调用之前被初始化，main结束后被释放；
         }
     }
-    else
-    {
-        // TODO: 更改错误代码以符合需要
+    else {
         wprintf(L"错误: GetModuleHandle 失败\n");
         nRetCode = 1;
     }

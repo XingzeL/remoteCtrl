@@ -155,6 +155,7 @@ public:
 	}
 
 	bool AcceptClient() {
+		TRACE("enter AcceptClient\r\n");
 		sockaddr_in client_adr;
 		int cli_sz = sizeof(client_adr); //fault1: 是adr的size，写成了sock的size导致accept直接返回-1
 		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
@@ -171,11 +172,18 @@ public:
 		if (m_client == -1) return false;
 		//char buffer[1024] = "";
 		char* buffer = new char[BUFFERSIZE];
+		//原来没有delete掉的原因：buffer不确定是长连接还是短链接
+		TRACE("Server get command %d\r\n", m_packet.sCmd);
+		if (buffer == NULL) {
+			TRACE("内存不足！\r\n");
+			return -2;
+		}
 		memset(buffer, 0, BUFFERSIZE);
 		size_t index = 0;
 		while (true) {
 			size_t len = recv(m_client, buffer + index, BUFFERSIZE - index, 0);
 			if (len <= 0) {
+				delete[]buffer; //短连接的情况：只处理一次cmd之后可以不用了
 				return -1;
 			}
 
@@ -186,9 +194,11 @@ public:
 				//解析成功，输出
 				memmove(buffer, buffer + len, BUFFERSIZE - len); //将剩余的数据移动到缓冲的头步m_packet
 				index -= len; //注意：上面的len和这里的len可能不同，因为读到了2000字节可能1000个字节是一个包，先解析一个包，把剩余数据移到前面，让index变化
+				delete[]buffer;
 				return m_packet.sCmd;
 			}
 		}
+		delete[]buffer;
 		return -1; //意外情况
 	}
 
@@ -219,6 +229,14 @@ public:
 		}
 
 		return false;
+	}
+	CPacket& GetPacket() {
+		return m_packet;
+	}
+
+	void CloseClient() {
+		closesocket(m_client);
+		m_client = INVALID_SOCKET;
 	}
 
 private: 

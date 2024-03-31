@@ -3,6 +3,7 @@
 #include "pch.h"
 #include <string>
 #include "framework.h"
+#include <vector>
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
 #pragma pack(1)
@@ -129,21 +130,11 @@ typedef struct MouseEvent {
 	POINT ptXY; //坐标
 }MOUSEEV, * PMOUSEEV;
 
-std::string GetErrorInfo(int wsaErrCode) {
-	std::string ret;
-	LPVOID lpMsgBuf = NULL;
-	FormatMessage(
-		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
-		NULL,
-		wsaErrCode,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR)&lpMsgBuf, 0, NULL);
-	ret = (char*)lpMsgBuf;
-	LocalFree(lpMsgBuf);
 
-	return ret;
-}
-
+//在头文件中定义并实现了它： head.h中定义并实现了，a.cpp, b.cpp包含了同一个head.h，就会出现同一个符号导致报错：
+//1>RemoteClientDlg.obj : error LNK2005: "class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > __cdecl GetErrorInfo(int)" (?GetErrorInfo@@YA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@H@Z) 已经在 ClientSocket.obj 中定义
+//1 > G:\Projets\remoteCtrl\x64\Debug\RemoteClient.exe : fatal error LNK1169 : 找到一个或多个多重定义的符号
+std::string GetErrorInfo(int wsaErrCode);
 class CClientSocket
 {
 public:
@@ -156,7 +147,11 @@ public:
 	}
 
 	bool InitSocket(const std::string& strIPAddress) {
-
+		//修改的bug：因为每次送消息都会关闭连接，client不能像server一样socket只初始化一次
+		// 每次Inite都要初始化m_sock
+		
+		if (m_sock != INVALID_SOCKET) CloseSocket();
+		m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
 		//TODO: 进行socket的校验
 		if (m_sock == -1) return false;
 		sockaddr_in serv_adr;
@@ -177,6 +172,10 @@ public:
 			AfxMessageBox(_T("连接失败"));
 			TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrorInfo(WSAGetLastError()).c_str());
 		}
+		else {
+			AfxMessageBox(_T("连接成功"));
+
+		}
 		return true;
 	}
 
@@ -185,25 +184,34 @@ public:
 	int DealCommand() {
 		if (m_sock == -1) return false;
 		//char buffer[1024] = "";
-		char* buffer = new char[BUFFERSIZE];
+		char* buffer = m_buffer.data(); 
+		//原来没有delete掉的原因：buffer不确定是长连接还是短链接
+
+		if (buffer == NULL) {
+			TRACE("内存不足！\r\n");
+			return -2;
+		}
 		memset(buffer, 0, BUFFERSIZE);
 		size_t index = 0;
 		while (true) {
 			size_t len = recv(m_sock, buffer + index, BUFFERSIZE - index, 0);
 			if (len <= 0) {
+				//delete[]buffer; //短连接的情况：只处理一次cmd之后可以不用了
 				return -1;
 			}
 
 			index += len;
 			len = index;
-			m_packet = CPacket((BYTE*)buffer, len); //这里可能会改变len
+			m_packet = CPacket((BYTE*)buffer, len); //这里可能会改变len,len是实际上用掉的size
 			if (len > 0) {
 				//解析成功，输出
 				memmove(buffer, buffer + len, BUFFERSIZE - len); //将剩余的数据移动到缓冲的头步m_packet
 				index -= len; //注意：上面的len和这里的len可能不同，因为读到了2000字节可能1000个字节是一个包，先解析一个包，把剩余数据移到前面，让index变化
+				//delete[]buffer;
 				return m_packet.sCmd;
 			}
 		}
+		//delete[]buffer;
 		return -1; //意外情况
 	}
 
@@ -236,8 +244,17 @@ public:
 		return false;
 	}
 
+	CPacket& GetPack() {
+		return m_packet;
+	}
+
+	void CloseSocket() {
+		closesocket(m_sock);
+		m_sock = INVALID_SOCKET; //-1
+	}
 private:
 
+	std::vector<char> m_buffer; //可以直接用名字取地址
 	SOCKET m_sock;
 	CPacket m_packet;
 	//单例模式：将构造和析构函数作为private
@@ -252,7 +269,8 @@ private:
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);
 			exit(0); //结束进程
 		}
-		m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
+		//m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
+		m_buffer.resize(BUFFERSIZE);
 	}
 	~CClientSocket() {
 		closesocket(m_sock);
