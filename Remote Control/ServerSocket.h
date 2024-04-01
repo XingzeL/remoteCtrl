@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "framework.h"
 
+//#define _CRT_SECURE_NO_WARNINGS
 #pragma pack(push)
 #pragma pack(1)
 class CPacket {
@@ -147,9 +148,15 @@ public:
 		serv_adr.sin_family = AF_INET;
 		serv_adr.sin_addr.s_addr = INADDR_ANY; //所有的IP
 		serv_adr.sin_port = htons(9527);
+		char errMsg[256]; // 定义用于存储错误信息的缓冲区
 		//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
 		// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
-		if (bind(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == -1) return false; //注意serv_adr的转换要取地址 TODO:校验
+		if (bind(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == -1)
+		{
+			strerror_s(errMsg, sizeof(errMsg), errno);
+			fprintf(stderr, "Error in bind: %s\n", errMsg);
+			return false;
+		}
 		if (listen(m_sock, 1) == -1) return false;
 		return true;
 	}

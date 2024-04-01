@@ -46,7 +46,7 @@ int MakeDriverInfo() {
     CPacket pack(1, (BYTE*)result.c_str(), result.size());
     //Dump((BYTE*)&pack, pack.nLength + 6); //(BYTE*)&pack这种取数据的方式有问题，因为pack是一个对象，取地址不会得到里面的内容
     Dump((BYTE*)pack.Data(), pack.Size());
-    //CServerSocket::getInstance()->Send(pack);
+    CServerSocket::getInstance()->Send(pack);
     return 0;
     //_chdrive(1); //改变当前的驱动，如果能改变成功，说明驱动存在
 }

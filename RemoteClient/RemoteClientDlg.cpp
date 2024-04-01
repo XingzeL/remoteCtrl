@@ -30,6 +30,8 @@ public:
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
+private:
+	int SendCommandPacket(int nCmd, BYTE* pData = NULL, size_t nLength = 0);
 
 // 实现
 protected:
@@ -44,6 +46,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 }
+
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 END_MESSAGE_MAP()
@@ -66,6 +69,29 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_IPAddress(pDX, IDC_IPADDRESSCTRL, m_server_address);
 	DDX_Text(pDX, IDC_PORTCTRL, m_nPort);
+	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+}
+
+int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
+{
+	UpdateData();
+	m_server_address;
+	int port = _tstoi(m_nPort);
+	CClientSocket* pClient = CClientSocket::getInstance();
+	int ret = pClient->InitSocket(m_server_address, port); //就会进行连接
+
+	if (!ret) {
+		AfxMessageBox(_T("网络初始化失败"));
+		return -1;
+	}
+
+	CPacket pack(nCmd, NULL, nLength);
+	ret = pClient->Send(pack);
+	TRACE("Send ret %d\r\n", ret);
+	int cmd = pClient->DealCommand(); //去接收
+	TRACE("ack: %d\r\n", pClient->GetPack().sCmd);
+	pClient->CloseSocket();
+	return cmd;
 }
 
 BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
@@ -73,8 +99,10 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON1, &CRemoteClientDlg::OnBnClickedButton1)
-	ON_BN_CLICKED(IDC_BUTTON2, &CRemoteClientDlg::OnBnClickedButton2)
+	//ON_BN_CLICKED(IDC_BUTTON2, &CRemoteClientDlg::OnBnClickedButton2)
 
+	ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIST1, &CRemoteClientDlg::OnLvnItemchangedList1)
+	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
 END_MESSAGE_MAP()
 
 
@@ -171,32 +199,51 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 
 void CRemoteClientDlg::OnBnClickedButton1()
 {
-	UpdateData(); //更新界面的一些数据
-	m_server_address;
-	int port = _tstoi(m_nPort); //MFC中转换CString到int
+	SendCommandPacket(9);
+}
 
-	CClientSocket* pClient = CClientSocket::getInstance();
-	int ret = pClient->InitSocket(m_server_address, port); //就会进行连接
-	
-	if (!ret) {
-		AfxMessageBox(_T("网络初始化失败"));
+
+void CRemoteClientDlg::OnLvnItemchangedList1(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMLISTVIEW pNMLV = reinterpret_cast<LPNMLISTVIEW>(pNMHDR);
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+}
+
+
+void CRemoteClientDlg::OnBnClickedBtnFileinfo()
+{
+	int ret = SendCommandPacket(1);
+	if (ret == -1) {
+		AfxMessageBox(_T("命令处理失败"));
 		return;
 	}
+	CClientSocket* pClient = CClientSocket::getInstance();
+	std::string drivers = pClient->GetPack().strData; // 获取逗号分隔的文件信息
+	CString dr;
 
-	CPacket pack(9, NULL, 0);
-	ret = pClient->Send(pack);
-	TRACE("Send ret %d\r\n", ret);
-	pClient->DealCommand(); //去接收
-	TRACE("ack: %d\r\n", pClient->GetPack().sCmd);
-	pClient->CloseSocket();
-	//CPacket pack;
-	//pClient->Send(pack);
+	// 删除树控件中的所有项
+	m_Tree.DeleteAllItems();
+
+	// 循环遍历字符串
+	for (size_t i = 0; i < drivers.size(); ++i) {
+		// 如果遇到逗号，将当前子字符串插入树控件并清空临时字符串
+		if (drivers[i] == ',') {
+			dr += ":"; //windows磁盘的标号
+			//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
+			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+			m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+			dr.Empty();
+			continue;
+		}
+		// 将字符添加到临时字符串中
+		dr += drivers[i];
+	}
+
+	 //插入最后一个子字符串
+	if (!dr.IsEmpty()) {
+		dr += ":";
+		//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str()); // 将完整的子项字符串存储到临时 CString 中
+		m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST); // 插入完整的子项字符串
+	}
 }
-
-
-void CRemoteClientDlg::OnBnClickedButton2()
-{
-	// TODO: 在此添加控件通知处理程序代码
-
-}
-

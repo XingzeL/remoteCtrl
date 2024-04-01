@@ -174,10 +174,10 @@ public:
 			AfxMessageBox(_T("连接失败"));
 			TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrorInfo(WSAGetLastError()).c_str());
 		}
-		else {
-			AfxMessageBox(_T("连接成功"));
+		//else {
+		//	AfxMessageBox(_T("连接成功"));
 
-		}
+		//}
 		return true;
 	}
 
