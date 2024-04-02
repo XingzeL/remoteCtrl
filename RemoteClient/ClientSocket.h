@@ -118,6 +118,20 @@ public:
 };
 #pragma pack(pop)
 
+typedef struct file_info {
+	file_info() { //构造
+		IsInvalid = FALSE;
+		IsDirectory = -1;
+		HasNext = TRUE;
+		memset(szFileName, 0, sizeof(szFileName));
+	}
+
+	BOOL IsInvalid; //是否是无效的文件比如链接，快捷方式
+	char szFileName[256]; //名字
+	BOOL IsDirectory; //是否是目录
+	BOOL HasNext;
+}FILEINFO, * PFILEINFO;
+
 typedef struct MouseEvent {
 	MouseEvent() {
 		nAction = 0;

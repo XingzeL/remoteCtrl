@@ -72,7 +72,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
 }
 
-int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
+int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose,BYTE* pData, size_t nLength)
 {
 	UpdateData();
 	m_server_address;
@@ -85,12 +85,15 @@ int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
 		return -1;
 	}
 
-	CPacket pack(nCmd, NULL, nLength);
+	CPacket pack(nCmd, pData, nLength);
 	ret = pClient->Send(pack);
 	TRACE("Send ret %d\r\n", ret);
 	int cmd = pClient->DealCommand(); //去接收
 	TRACE("ack: %d\r\n", pClient->GetPack().sCmd);
-	pClient->CloseSocket();
+	if (bAutoClose) {
+		pClient->CloseSocket();
+	}
+	
 	return cmd;
 }
 
@@ -103,6 +106,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 
 	ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIST1, &CRemoteClientDlg::OnLvnItemchangedList1)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
+	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
 END_MESSAGE_MAP()
 
 
@@ -232,7 +236,9 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 			dr += ":"; //windows磁盘的标号
 			//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
 			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
-			m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+			HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+			m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
+			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
 			dr.Empty();
 			continue;
 		}
@@ -242,8 +248,94 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 
 	 //插入最后一个子字符串
 	if (!dr.IsEmpty()) {
-		dr += ":";
-		//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str()); // 将完整的子项字符串存储到临时 CString 中
-		m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST); // 插入完整的子项字符串
+		dr += ":"; //windows磁盘的标号
+		HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+		m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
 	}
+}
+
+CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
+	//指定一个节点，展开所有文件信息
+	
+	CString strRet, strTmp;
+	do {
+		strTmp = m_Tree.GetItemText(hTree);
+		TRACE(strTmp);
+		strRet = strTmp + '\\' + strRet;
+		hTree = m_Tree.GetParentItem(hTree);
+	} while (hTree != NULL);
+
+	return strRet;
+}
+void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
+{
+	HTREEITEM hSub = NULL;
+	do {
+		hSub = m_Tree.GetChildItem(hTree);
+		if (hSub != NULL)  m_Tree.DeleteItem(hSub); //防止重复获取
+	} while (hSub != NULL);
+}
+
+void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// 处理双击：文件和目录分别有逻辑， 还有.和..的处理
+	*pResult = 0;
+	CPoint ptMouse;
+	GetCursorPos(&ptMouse); //得到鼠标的坐标，是一个全局的
+	m_Tree.ScreenToClient(&ptMouse); //坐标转换
+
+	//去判断一下点击是否是点中了某个节点
+	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse);
+	if (hTreeSelected == NULL) {
+		return;
+	}
+	//看看选中的东西有没有子节点
+	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; //因为每个目录都加入了空的子节点，所以没有的话就是文件
+	DeleteTreeChildrenItem(hTreeSelected); //防止无限增长
+
+	//准备获取这个节点的信息
+	CString strPath = GetPath(hTreeSelected); //拿到这个节点的路径，准备传给server端
+	//int nLength = strPath.GetLength(); // 获取路径长度
+	//BYTE pData[256]; // 缓冲区
+	//memcpy(pData, strPath.GetBuffer(nLength), nLength); // 复制路径到缓冲区
+	//pData[nLength] = '\0'; // 添加终止符
+	//strPath.ReleaseBuffer(); // 释放内部缓冲区
+
+	//strPath 是 "D:\\"
+	//LPCTSTR str = (LPCTSTR)strPath;
+	//BYTE* pData = (BYTE*)(LPCTSTR)strPath;
+
+	//BYTE* pData = reinterpret_cast<BYTE*>(strPath.GetBuffer());
+	SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, sizeof((BYTE*)(LPCTSTR)strPath)); //这里只传进去了D而不是"D:\\"
+	int cmd = 0;
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+	CClientSocket* pClient = CClientSocket::getInstance();
+	while (pInfo->HasNext) {
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory); 
+		//从do-while改为while: 因为server的发送逻辑：如果是空路径或者没有权限就会直接发回一个空，没有内容，所以需要先判断HasNext
+		//覅 fiao 四声
+		if (pInfo->IsDirectory) {
+			if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
+				int cmd = pClient->DealCommand(); //拿到
+				TRACE("ack:%d\r\n", cmd);
+				if (cmd < 0) break;
+				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+				continue;
+			}
+		}
+
+		HTREEITEM hTemp = m_Tree.InsertItem(CString(pInfo->szFileName), hTreeSelected, TVI_LAST);
+		if (pInfo->IsDirectory) {
+			//如果是目录就加入一个空的节点，标记：如果一个节点是目录就有子节点，反则没有
+			m_Tree.InsertItem(0, hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+		}
+		
+		int cmd = pClient->DealCommand();
+		TRACE("ack:%d\r\n", cmd);
+		if (cmd < 0) break;
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+	}  //当hasnext为空，说明没有
+	
+	//注意：有一个点上不断双击时，需要保证不累积
+	pClient->CloseSocket();
 }
