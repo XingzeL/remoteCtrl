@@ -213,6 +213,7 @@ public:
 			size_t len = recv(m_sock, buffer + index, BUFFERSIZE - index, 0);
 			if (len <= 0) {
 				//delete[]buffer; //短连接的情况：只处理一次cmd之后可以不用了
+				TRACE("出现读包的问题！");
 				return -1;
 			}
 

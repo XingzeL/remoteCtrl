@@ -7,6 +7,7 @@
 #include "ServerSocket.h"
 #include <direct.h>
 #include <atlimage.h>
+#include <chrono>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -104,6 +105,9 @@ int MakeDirectoryInfo() {
         TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
+        //进行延时
+        auto start = std::chrono::steady_clock::now();
+        while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < 1) {}
         //IstFileInfos.push_back(finfo);
     } while (!_findnext(hfind, &fdata));
     //发送信息到控制端

@@ -70,6 +70,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_IPAddress(pDX, IDC_IPADDRESSCTRL, m_server_address);
 	DDX_Text(pDX, IDC_PORTCTRL, m_nPort);
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+	DDX_Control(pDX, IDC_LIST_FILE, m_List);
 }
 
 int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose,BYTE* pData, size_t nLength)
@@ -104,9 +105,11 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON1, &CRemoteClientDlg::OnBnClickedButton1)
 	//ON_BN_CLICKED(IDC_BUTTON2, &CRemoteClientDlg::OnBnClickedButton2)
 
-	ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIST1, &CRemoteClientDlg::OnLvnItemchangedList1)
+	//ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIST1, &CRemoteClientDlg::OnLvnItemchangedList1)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
+	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
+	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
 END_MESSAGE_MAP()
 
 
@@ -260,12 +263,72 @@ CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
 	CString strRet, strTmp;
 	do {
 		strTmp = m_Tree.GetItemText(hTree);
-		TRACE(strTmp);
+		
 		strRet = strTmp + '\\' + strRet;
 		hTree = m_Tree.GetParentItem(hTree);
 	} while (hTree != NULL);
-
+	TRACE(strRet);
 	return strRet;
+}
+void CRemoteClientDlg::LoadFileInfo()
+{
+	CPoint ptMouse;
+	GetCursorPos(&ptMouse); //得到鼠标的坐标，是一个全局的
+	m_Tree.ScreenToClient(&ptMouse); //坐标转换
+
+	//去判断一下点击是否是点中了某个节点
+	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse);
+	if (hTreeSelected == NULL) {
+		return;
+	}
+	//看看选中的东西有没有子节点
+	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; //因为每个目录都加入了空的子节点，所以没有的话就是文件
+	DeleteTreeChildrenItem(hTreeSelected); //防止无限增长
+	m_List.DeleteAllItems();
+	//准备获取这个节点的信息
+	CString strPath = GetPath(hTreeSelected); //拿到这个节点的路径，准备传给server端
+
+	//没有调成多字节字符集之前类型转换就没有用
+	BYTE* pData = (BYTE*)(LPCTSTR)strPath;
+	//传给服务器：得到文件信息
+	SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //如果不是多字符集:这里只传进去了D而不是"D:\\"
+	int cmd = 0;
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+	CClientSocket* pClient = CClientSocket::getInstance();
+	while (pInfo->HasNext) {
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
+		//从do-while改为while: 因为server的发送逻辑：如果是空路径或者没有权限就会直接发回一个空，没有内容，所以需要先判断HasNext
+		//覅 fiao 四声
+		if (pInfo->IsDirectory) {
+			if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
+				int cmd = pClient->DealCommand(); //拿到
+				TRACE("ack:%d\r\n", cmd);
+				if (cmd < 0) break;
+				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+				continue;
+			}
+			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
+			m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+		}
+		else {
+			//是文件的情况
+			/*m_List.InsertItem(0, pInfo->szFileName);*/
+			m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
+			m_List.UpdateWindow();
+			TRACE("文件名：%s",pInfo->szFileName);
+		}
+
+		int cmd = pClient->DealCommand();
+		TRACE("ack:%d\r\n", cmd);
+		if (cmd < 0) {
+			TRACE("退出建树");
+			break;
+		}
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+	}  //当hasnext为空，说明没有
+
+	//注意：有一个点上不断双击时，需要保证不累积
+	pClient->CloseSocket();
 }
 void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
 {
@@ -280,62 +343,34 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	// 处理双击：文件和目录分别有逻辑， 还有.和..的处理
 	*pResult = 0;
-	CPoint ptMouse;
-	GetCursorPos(&ptMouse); //得到鼠标的坐标，是一个全局的
-	m_Tree.ScreenToClient(&ptMouse); //坐标转换
+	LoadFileInfo();
+}
 
-	//去判断一下点击是否是点中了某个节点
-	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse);
-	if (hTreeSelected == NULL) {
-		return;
+
+void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+
+	*pResult = 0;
+	CPoint ptMouse, ptList;
+	GetCursorPos(&ptMouse);
+	ptList = ptMouse;
+	m_List.ScreenToClient(&ptList); //转换成client的坐标
+	int ListSelected = m_List.HitTest(ptList); //返回一个序号，表明哪个列表被选中了
+	if (ListSelected < 0) return;
+	//要弹出一个菜单
+	CMenu menu;
+	menu.LoadMenu(IDR_MENU_RCLICK); //加载菜单
+	CMenu* pPopup = menu.GetSubMenu(0); //选子菜单的第一个
+	if (pPopup != NULL) {
+		pPopup->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
 	}
-	//看看选中的东西有没有子节点
-	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; //因为每个目录都加入了空的子节点，所以没有的话就是文件
-	DeleteTreeChildrenItem(hTreeSelected); //防止无限增长
-
-	//准备获取这个节点的信息
-	CString strPath = GetPath(hTreeSelected); //拿到这个节点的路径，准备传给server端
-	//int nLength = strPath.GetLength(); // 获取路径长度
-	//BYTE pData[256]; // 缓冲区
-	//memcpy(pData, strPath.GetBuffer(nLength), nLength); // 复制路径到缓冲区
-	//pData[nLength] = '\0'; // 添加终止符
-	//strPath.ReleaseBuffer(); // 释放内部缓冲区
-
-	//strPath 是 "D:\\"
-	//LPCTSTR str = (LPCTSTR)strPath;
-	//BYTE* pData = (BYTE*)(LPCTSTR)strPath;
-
-	//BYTE* pData = reinterpret_cast<BYTE*>(strPath.GetBuffer());
-	SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, sizeof((BYTE*)(LPCTSTR)strPath)); //这里只传进去了D而不是"D:\\"
-	int cmd = 0;
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-	CClientSocket* pClient = CClientSocket::getInstance();
-	while (pInfo->HasNext) {
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory); 
-		//从do-while改为while: 因为server的发送逻辑：如果是空路径或者没有权限就会直接发回一个空，没有内容，所以需要先判断HasNext
-		//覅 fiao 四声
-		if (pInfo->IsDirectory) {
-			if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
-				int cmd = pClient->DealCommand(); //拿到
-				TRACE("ack:%d\r\n", cmd);
-				if (cmd < 0) break;
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-				continue;
-			}
-		}
-
-		HTREEITEM hTemp = m_Tree.InsertItem(CString(pInfo->szFileName), hTreeSelected, TVI_LAST);
-		if (pInfo->IsDirectory) {
-			//如果是目录就加入一个空的节点，标记：如果一个节点是目录就有子节点，反则没有
-			m_Tree.InsertItem(0, hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
-		}
-		
-		int cmd = pClient->DealCommand();
-		TRACE("ack:%d\r\n", cmd);
-		if (cmd < 0) break;
-		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-	}  //当hasnext为空，说明没有
-	
-	//注意：有一个点上不断双击时，需要保证不累积
-	pClient->CloseSocket();
 }
