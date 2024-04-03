@@ -389,10 +389,26 @@ int UnLockMachine() {
 }
 
 int TestConncet() {
-    CPacket pack(9, NULL, 0);
+    CPacket pack(1981, NULL, 0);
     
     bool ret = CServerSocket::getInstance()->Send(pack);
     TRACE("服务端发送ret: %d\r\n",ret);
+    return 0;
+}
+
+int DeleteLocalFile() {
+    
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath); //得到文件路径
+    TCHAR sPath[MAX_PATH] = _T("");
+    //mbstowcs(sPath, strPath.c_str(), strPath.size()); //中文可能会变成乱码导致删除不了文件
+    MultiByteToWideChar(CP_ACP, 0, strPath.c_str(), strPath.size(),
+        sPath, sizeof(sPath) / sizeof(TCHAR));
+    DeleteFile(sPath);
+    //返回响应
+    CPacket pack(9, NULL, 0);
+    bool ret = CServerSocket::getInstance()->Send(pack);
+    TRACE("服务端发送ret: %d\r\n", ret);
     return 0;
 }
 
@@ -424,9 +440,12 @@ int ExecuteCommd(int nCmd) {
     case 8:
         ret = UnLockMachine();
         break;
-    case 9:
+    case 9: //删除文件
+        ret = DeleteLocalFile();
+    case 1981:
         ret = TestConncet();
         break;
+        
     }
 
     return ret;
