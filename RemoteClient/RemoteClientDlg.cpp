@@ -110,6 +110,10 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
 	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
 	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
+	ON_COMMAND(ID_DOWNLOAD, &CRemoteClientDlg::OnDownload)
+	ON_COMMAND(ID_DELETEFILE, &CRemoteClientDlg::OnDeletefile)
+	ON_COMMAND(ID_RUNFILE, &CRemoteClientDlg::OnRunfile)
+	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE_DIR, &CRemoteClientDlg::OnTvnSelchangedTreeDir)
 END_MESSAGE_MAP()
 
 
@@ -316,6 +320,7 @@ void CRemoteClientDlg::LoadFileInfo()
 			m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
 			m_List.UpdateWindow();
 			TRACE("文件名：%s",pInfo->szFileName);
+			//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
 		}
 
 		int cmd = pClient->DealCommand();
@@ -373,4 +378,86 @@ void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
 	if (pPopup != NULL) {
 		pPopup->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
 	}
+}
+
+
+void CRemoteClientDlg::OnDownload()
+{
+	// 下载文件
+	//菜单函数的按键是无参数的
+	int nListSelected = m_List.GetSelectionMark();
+	CString strFile = m_List.GetItemText(nListSelected, 0); //拿到文件名
+
+	CFileDialog dlg(FALSE, "*",
+		m_List.GetItemText(nListSelected,0), 
+		OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, NULL, this);
+
+	if (dlg.DoModal() == IDOK) {
+		FILE* pFile = fopen(dlg.GetPathName(), "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox("本地没有权限保存该文件或者无法创建文件！！");
+			return;
+		}
+
+		//模态窗口：用户选择是否下载
+		HTREEITEM hSelected = m_Tree.GetSelectedItem(); //获取被选择的树
+		strFile = GetPath(hSelected) + strFile;//完整路径
+		TRACE("%s\r\n", LPCSTR(strFile));
+
+
+		//发送命令
+		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+		if (ret < 0) {
+			AfxMessageBox(_T("执行下载命令失败!!!"));
+			TRACE("执行下载失败: ret = %d\r\n", ret);
+			return;
+		}
+		//进行接收
+		//1.longlong 长度  
+		CClientSocket* pClient = CClientSocket::getInstance();
+		long long nlength = *(long long*)CClientSocket::getInstance()->GetPack().strData.c_str();
+		if (nlength == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！");
+			return;
+		}
+
+		long long nCount = 0; //维护接收的长度信息
+		//接收文件：用fopen核fwrite
+		//用一个模态的对话框
+		
+		while (nCount < nlength) {
+			ret = pClient->DealCommand();
+			if (ret < 0) {
+				AfxMessageBox("传输失败!");
+				TRACE("传输失败：ret = %d\r\n", ret);
+				break;
+			}
+
+			fwrite(pClient->GetPack().strData.c_str(), 1, pClient->GetPack().strData.size(), pFile);
+			nCount += pClient->GetPack().strData.size();
+		}
+		fclose(pFile);
+		pClient->CloseSocket();
+	}
+
+}
+
+
+void CRemoteClientDlg::OnDeletefile()
+{
+	// 删除文件
+}
+
+
+void CRemoteClientDlg::OnRunfile()
+{
+	// 打开文件
+}
+
+
+void CRemoteClientDlg::OnTvnSelchangedTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include "framework.h"
 #include <vector>
+
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
 #pragma pack(1)

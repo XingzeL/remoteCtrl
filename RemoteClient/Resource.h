@@ -7,7 +7,6 @@
 #define IDS_ABOUTBOX                    101
 #define IDD_REMOTECLIENT_DIALOG         102
 #define IDR_MAINFRAME                   128
-#define IDR_MENU1                       129
 #define IDR_MENU_RCLICK                 129
 #define IDC_BUTTON1                     1000
 #define IDC_CONNECT                     1000

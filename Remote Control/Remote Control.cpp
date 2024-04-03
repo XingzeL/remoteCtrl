@@ -156,6 +156,7 @@ int DownloadFile() { //控制端要下载，服务端进行上传
         fseek(pFile, 0, SEEK_END); //将文件指针进行一次偏移
         data = _ftelli64(pFile); //拿文件的长度
         CPacket head(4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(head); //原来忘记送head出去了
         fseek(pFile, 0, SEEK_SET); //将文件指针偏移重置回开头
 
         char buffer[1024] = "";
