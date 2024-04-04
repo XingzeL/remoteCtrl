@@ -8,6 +8,8 @@
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
 #pragma pack(1)
+
+void Dump(BYTE* pData, size_t nSize);
 class CPacket {
 public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
@@ -196,9 +198,8 @@ public:
 		return true;
 	}
 
-
 #define BUFFERSIZE 4096
-	int DealCommand() {
+	int DealCommand() { //接收服务器的响应，解析一个packet，返回值为响应的命令值
 		if (m_sock == -1) return false;
 		//char buffer[1024] = "";
 		char* buffer = m_buffer.data(); 
@@ -208,25 +209,26 @@ public:
 			TRACE("内存不足！\r\n");
 			return -2;
 		}
-		memset(buffer, 0, BUFFERSIZE);
-		size_t index = 0;
+		/*memset(buffer, 0, BUFFERSIZE);*/ //这里如果清零的话会将m_buffer的data清掉
+		static size_t index = 0; //index设为static，下次进入DealCommand的时候继续接收而不是清空
 		while (true) {
 			size_t len = recv(m_sock, buffer + index, BUFFERSIZE - index, 0);
-			if (len <= 0) {
+			if ((len <= 0) && (index == 0)) { //10.3.3(解决文件接收bug)加入index == 0的判断：index代表缓冲区中还剩的数据是否读完；len代表本次recv读取失败
 				//delete[]buffer; //短连接的情况：只处理一次cmd之后可以不用了
 				TRACE("出现读包的问题！");
 				return -1;
 			}
-
+			Dump((BYTE*)buffer, index);
 			index += len;
 			len = index;
 			m_packet = CPacket((BYTE*)buffer, len); //这里可能会改变len,len是实际上用掉的size
 			if (len > 0) {
 				//解析成功，输出
-				memmove(buffer, buffer + len, BUFFERSIZE - len); //将剩余的数据移动到缓冲的头步m_packet
+				//memmove(buffer, buffer + len, BUFFERSIZE - len); //将剩余的数据移动到缓冲的头步m_packet
+				memmove(buffer, buffer + len, index - len);
 				index -= len; //注意：上面的len和这里的len可能不同，因为读到了2000字节可能1000个字节是一个包，先解析一个包，把剩余数据移到前面，让index变化
 				//delete[]buffer;
-				return m_packet.sCmd;
+				return m_packet.sCmd; //处理掉一个packet就返回，外面的循环会不断调用DealCommand
 			}
 		}
 		//delete[]buffer;
@@ -289,6 +291,7 @@ private:
 		}
 		//m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
 		m_buffer.resize(BUFFERSIZE);
+		memset(m_buffer.data(), 0, BUFFERSIZE); //
 	}
 	~CClientSocket() {
 		closesocket(m_sock);

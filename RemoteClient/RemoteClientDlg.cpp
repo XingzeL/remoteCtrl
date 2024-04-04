@@ -299,6 +299,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	int cmd = 0;
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
 	CClientSocket* pClient = CClientSocket::getInstance();
+	int count = 0; //用于计数
 	while (pInfo->HasNext) {
 		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
 		//从do-while改为while: 因为server的发送逻辑：如果是空路径或者没有权限就会直接发回一个空，没有内容，所以需要先判断HasNext
@@ -330,8 +331,9 @@ void CRemoteClientDlg::LoadFileInfo()
 			break;
 		}
 		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
+		++count;
 	}  //当hasnext为空，说明没有
-
+	TRACE("收到了%d个项目", count);
 	//注意：有一个点上不断双击时，需要保证不累积
 	pClient->CloseSocket();
 }
@@ -491,7 +493,7 @@ void CRemoteClientDlg::OnDeletefile()
 		AfxMessageBox("删除文件命令执行失败！！！");
 	}
 	//刷新文件列表
-	LoadFileCurrent();
+	LoadFileCurrent(); //TODO：文件夹中文件显示有缺漏
 }
 
 

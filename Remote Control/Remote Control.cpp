@@ -98,6 +98,7 @@ int MakeDirectoryInfo() {
     }
     //用通配符找到第一个文件
     //先验证第一个文件，然后next
+    int count = 0;
     do {
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0; 
@@ -105,16 +106,18 @@ int MakeDirectoryInfo() {
         TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
-        //进行延时
-        auto start = std::chrono::steady_clock::now();
-        while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < 1) {}
+        ////进行延时
+        //auto start = std::chrono::steady_clock::now();
+        //while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < 1) {}
         //IstFileInfos.push_back(finfo);
+        count++;
     } while (!_findnext(hfind, &fdata));
     //发送信息到控制端
     //问题：有的目录下可能有10万文件，这个循环会非常久
     FILEINFO finfo;
     finfo.HasNext = FALSE; //完成循环了
     CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
+    TRACE("发送了%d个项目", count);
     if (CServerSocket::getInstance()->Send(pack) == false) {
         OutputDebugString(_T("包发送失败"));
         return -4;
