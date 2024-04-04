@@ -218,7 +218,7 @@ public:
 				TRACE("出现读包的问题！");
 				return -1;
 			}
-			Dump((BYTE*)buffer, index);
+			//Dump((BYTE*)buffer, index);
 			index += len;
 			len = index;
 			m_packet = CPacket((BYTE*)buffer, len); //这里可能会改变len,len是实际上用掉的size
