@@ -379,6 +379,13 @@ void CRemoteClientDlg::threadEntryForDownLoadFile(void* arg)
 	_endthread();
 }
 
+void CRemoteClientDlg::threadEntryForWatchData(void* arg)
+{
+	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
+	thiz->threadWatchData();
+	_endthread();
+}
+
 void CRemoteClientDlg::threadDownFile()
 {
 	// 下载文件
@@ -445,6 +452,33 @@ void CRemoteClientDlg::threadDownFile()
 	m_dlgStatus.ShowWindow(SW_HIDE);
 	EndWaitCursor(); //结束光标的沙漏
 	MessageBox(_T("下载完成！！"), _T("完成")); //提示
+}
+
+void CRemoteClientDlg::threadWatchData()
+{
+	CClientSocket* pClient = CClientSocket::getInstance();
+	do {
+		pClient = CClientSocket::getInstance();
+	} while (pClient == NULL); //因为连接可能有延时，要先等待
+
+	for (;;) {
+		CPacket pack(6, NULL, 0); //持续进行拿数据，丢到缓存中
+		bool ret = pClient->Send(pack);
+		
+		if (ret) {
+			int cmd = pClient->DealCommand();
+			if (cmd == 6) {
+				if (m_isFull = false) {
+					BYTE* pData = (BYTE*)pClient->GetPack().strData.c_str(); //TODO：存入m_image中
+					m_isFull = true;
+				}
+			}
+		}
+		else {
+			Sleep(1); //休眠1ms，防止网络断开的时候占用大量CPU重试
+		}
+
+	}
 }
 
 void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)

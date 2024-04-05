@@ -39,7 +39,13 @@ public:
 	void LoadFileInfo();
 	void LoadFileCurrent();
 	static void threadEntryForDownLoadFile(void* arg);
+	static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this
 	void threadDownFile();
+	void threadWatchData(); //成员函数可以访问this指针
+
+private:
+	CImage m_image; //图像缓存
+	bool m_isFull; //图像缓存是否有数据
 
 // 实现
 protected:
