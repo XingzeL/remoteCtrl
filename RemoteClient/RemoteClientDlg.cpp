@@ -115,6 +115,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_RUNFILE, &CRemoteClientDlg::OnRunfile)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE_DIR, &CRemoteClientDlg::OnTvnSelchangedTreeDir)
 	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)
+	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -466,11 +468,29 @@ void CRemoteClientDlg::threadWatchData()
 		bool ret = pClient->Send(pack);
 		
 		if (ret) {
-			int cmd = pClient->DealCommand();
+			int cmd = pClient->DealCommand(); //解析server的响应
 			if (cmd == 6) {
-				if (m_isFull = false) {
-					BYTE* pData = (BYTE*)pClient->GetPack().strData.c_str(); //TODO：存入m_image中
-					m_isFull = true;
+				if (m_isFull == false) { //更新数据到缓存
+					//存入m_image缓冲中
+					BYTE* pData = (BYTE*)pClient->GetPack().strData.c_str();  //server发送图片是放到一个包中
+					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  // 分配内存
+					if (hMem == NULL) {
+						TRACE("内存不足");
+						Sleep(1);
+						continue;
+					}
+					IStream* pStream = NULL;  // 定义一个流对象指针
+					// 创建一个基于内存的流对象
+					HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);
+					if (hRet == S_OK) {
+						ULONG length = 0;
+						// 向流对象中写入数据
+						pStream->Write(pData, pClient->GetPack().strData.size(), &length);
+						LARGE_INTEGER bg = { 0 }; // 定义一个大整数对象，用于指定流中的位置
+						pStream->Seek(bg, STREAM_SEEK_SET, NULL);// 将流中的位置设置为开头
+						m_image.Load(pStream); // 从流中加载图像到 m_image 对象中
+						m_isFull = true; 
+					}
 				}
 			}
 		}
@@ -589,4 +609,23 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 	CString strFile = (LPCSTR)lParam;
 	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
 	return LRESULT();
+}
+
+
+void CRemoteClientDlg::OnBnClickedBtnStartWatch()
+{
+	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+	//防止无限启动线程
+	GetDlgItem(IDC_BTN_START_WATCH)->EnableWindow(FALSE); //将按钮设为失效
+	//需要开启一个监视窗口
+	CWatchDialog dlg(this); //当自己定义了之后，alt+enter自动在上面加头文件
+	dlg.DoModal(); //弹出模态对话框
+}
+
+
+void CRemoteClientDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+
+	CDialogEx::OnTimer(nIDEvent);
 }

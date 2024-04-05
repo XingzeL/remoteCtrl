@@ -5,6 +5,7 @@
 #pragma once
 #include "ClientSocket.h"
 #include "StatusDlg.h"
+#include "WatchDialog.h"
 #define WM_SEND_PACKET (WM_USER + 1) //发送数据包的消息
 
 // CRemoteClientDlg 对话框
@@ -42,6 +43,13 @@ public:
 	static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this
 	void threadDownFile();
 	void threadWatchData(); //成员函数可以访问this指针
+public:
+	bool isFull() const { //不会修改任何成员，内部改变的话报错
+		return m_isFull;
+	}
+	CImage& GetImage() {
+		return m_image;
+	}
 
 private:
 	CImage m_image; //图像缓存
@@ -79,4 +87,6 @@ public:
 
 	//自定义消息
 	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam); 
+	afx_msg void OnBnClickedBtnStartWatch();
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
