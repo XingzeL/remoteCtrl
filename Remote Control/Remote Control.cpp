@@ -285,7 +285,7 @@ int SendScreen() {
     int nWidth = GetDeviceCaps(hScreen, HORZRES); //水平的
     int nHeight = GetDeviceCaps(hScreen, VERTRES); //垂直，拿到高
     screen.Create(nWidth, nHeight, nBitPerPixel); //创建一个截图
-    BitBlt(screen.GetDC(), 0, 0, 2560, 1400, hScreen, 0, 0, SRCCOPY);
+    BitBlt(screen.GetDC(), 0, 0, 1080, 1080, hScreen, 0, 0, SRCCOPY);
     ReleaseDC(NULL, hScreen);
     HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0); 
     if (hMem == NULL) return -1;
@@ -416,6 +416,7 @@ int DeleteLocalFile() {
 }
 
 int ExecuteCommd(int nCmd) {
+    TRACE("into Execute Commadn");
     int ret = 0;
     switch (nCmd) {
     case 1: //查看磁盘分区

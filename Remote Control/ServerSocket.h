@@ -180,17 +180,21 @@ public:
 		TRACE("enter AcceptClient\r\n");
 		sockaddr_in client_adr;
 		int cli_sz = sizeof(client_adr); //fault1: 是adr的size，写成了sock的size导致accept直接返回-1
-		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
+		TRACE("Start to accept \r\n");
+		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz); //会卡在这里
+		TRACE("End Accept\r\n");
 		if (m_client == -1) return false;
 		//char buffer[1024];
 		//recv(m_sock, buffer, sizeof(buffer), 0);
 		//send(m_sock, buffer, sizeof(buffer), 0);
 		//closesocket(m_sock);
+		TRACE("quit AcceptClient\r\n");
 		return true;
 	}
 
 #define BUFFERSIZE 4096
 	int DealCommand() {
+		//TRACE("into Deal Command");
 		if (m_client == -1) return false;
 		//char buffer[1024] = "";
 		char* buffer = new char[BUFFERSIZE];

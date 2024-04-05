@@ -458,42 +458,48 @@ void CRemoteClientDlg::threadDownFile()
 
 void CRemoteClientDlg::threadWatchData()
 {
-	CClientSocket* pClient = CClientSocket::getInstance();
+	Sleep(50); //线程比应该比显示窗口后跑起来
+	CClientSocket* pClient = NULL;
 	do {
 		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL); //因为连接可能有延时，要先等待
 
 	for (;;) {
-		CPacket pack(6, NULL, 0); //持续进行拿数据，丢到缓存中
-		bool ret = pClient->Send(pack);
-		
-		if (ret) {
-			int cmd = pClient->DealCommand(); //解析server的响应
-			if (cmd == 6) {
-				if (m_isFull == false) { //更新数据到缓存
-					//存入m_image缓冲中
-					BYTE* pData = (BYTE*)pClient->GetPack().strData.c_str();  //server发送图片是放到一个包中
-					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  // 分配内存
-					if (hMem == NULL) {
-						TRACE("内存不足");
-						Sleep(1);
-						continue;
-					}
-					IStream* pStream = NULL;  // 定义一个流对象指针
-					// 创建一个基于内存的流对象
-					HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);
-					if (hRet == S_OK) {
-						ULONG length = 0;
-						// 向流对象中写入数据
-						pStream->Write(pData, pClient->GetPack().strData.size(), &length);
-						LARGE_INTEGER bg = { 0 }; // 定义一个大整数对象，用于指定流中的位置
-						pStream->Seek(bg, STREAM_SEEK_SET, NULL);// 将流中的位置设置为开头
-						m_image.Load(pStream); // 从流中加载图像到 m_image 对象中
-						m_isFull = true; 
-					}
+
+		//CPacket pack(6, NULL, 0); //持续进行拿数据，丢到缓存中
+		//bool ret = pClient->Send(pack); 
+		//第一个bug：这里返回-1，因为m_sock没有被初始化，但是用SendCommand就会出现与主线程的Update冲突
+		//因此也要通过信号的方式让主线程发送命令
+		if (m_isFull == false) {
+			int ret = SendMessage(WM_SEND_PACKET, 6 << 1 | 1); //让主线程发送命令6，设置isFull为1
+			if (ret == 6) {
+
+				//存入m_image缓冲中
+				BYTE* pData = (BYTE*)pClient->GetPack().strData.c_str();  //server发送图片是放到一个包中
+				HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  // 分配内存
+				if (hMem == NULL) {
+					TRACE("内存不足");
+					Sleep(1);
+					continue;
+				}
+				IStream* pStream = NULL;  // 定义一个流对象指针
+				// 创建一个基于内存的流对象
+				HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);
+				if (hRet == S_OK) {
+					ULONG length = 0;
+					// 向流对象中写入数据
+					pStream->Write(pData, pClient->GetPack().strData.size(), &length);
+					LARGE_INTEGER bg = { 0 }; // 定义一个大整数对象，用于指定流中的位置
+					pStream->Seek(bg, STREAM_SEEK_SET, NULL);// 将流中的位置设置为开头
+					m_image.Load(pStream); // 从流中加载图像到 m_image 对象中
+					m_isFull = true;
 				}
 			}
+			else {
+				Sleep(1);
+			}
 		}
+
 		else {
 			Sleep(1); //休眠1ms，防止网络断开的时候占用大量CPU重试
 		}
@@ -606,9 +612,25 @@ void CRemoteClientDlg::OnTvnSelchangedTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 
 LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 {
-	CString strFile = (LPCSTR)lParam;
-	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
-	return LRESULT();
+	int ret = 0;
+	int cmd = wParam >> 1;
+	switch (cmd) {
+	case 4:
+		{
+			CString strFile = (LPCSTR)lParam;
+			int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+
+		}
+		break;
+	case 6:
+		{
+			ret = SendCommandPacket(cmd, wParam & 1, NULL, 0);
+		}
+		break;
+	default:
+		return -1;
+	}
+	return ret;
 }
 
 
