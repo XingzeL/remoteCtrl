@@ -198,7 +198,7 @@ public:
 		return true;
 	}
 
-#define BUFFERSIZE 512000
+#define BUFFERSIZE 4096000
 	int DealCommand() { //接收服务器的响应，解析一个packet，返回值为响应的命令值
 		if (m_sock == -1) return false;
 		//char buffer[1024] = "";
