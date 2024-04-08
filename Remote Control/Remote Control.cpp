@@ -205,7 +205,7 @@ int MouseEvent() {
         case 0: //单击
             nFlag |= 0x10;
             break;
-        case 1:
+        case 1: //双击
             nFlag |= 0x20;
             break;
         case 2: //按下
@@ -218,6 +218,7 @@ int MouseEvent() {
         default: 
             break;
         }
+        TRACE("mouse event: : %08X x %d y %d\r\n", nFlag, mouse.ptXY.x, mouse.ptXY.y);
         switch (nFlag) {
         case 0x21: //左键双击
             mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());

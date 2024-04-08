@@ -23,7 +23,7 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
-	CPoint UserPoint2RemoteScreenPoint(CPoint& point);
+	CPoint UserPoint2RemoteScreenPoint(CPoint& point, bool isScree); //isScreen:是否是屏幕的坐标
 	virtual BOOL OnInitDialog();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	CStatic m_picture;  //显示图像的上下文
