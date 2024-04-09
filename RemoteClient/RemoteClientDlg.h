@@ -57,6 +57,7 @@ public:
 private:
 	CImage m_image; //图像缓存
 	bool m_isFull; //图像缓存是否有数据
+	bool m_isClosed; //监视是否关闭
 
 // 实现
 protected:

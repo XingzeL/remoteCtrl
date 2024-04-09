@@ -456,7 +456,7 @@ void CRemoteClientDlg::threadDownFile()
 	MessageBox(_T("下载完成！！"), _T("完成")); //提示
 }
 
-void CRemoteClientDlg::threadWatchData()
+void CRemoteClientDlg::threadWatchData() //可能存在异步问题导致程序崩溃
 {
 	Sleep(50); //线程比应该比显示窗口后跑起来
 	CClientSocket* pClient = NULL;
@@ -464,7 +464,7 @@ void CRemoteClientDlg::threadWatchData()
 		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL); //因为连接可能有延时，要先等待
 
-	for (;;) {
+	while (!m_isClosed) { 
 
 		//CPacket pack(6, NULL, 0); //持续进行拿数据，丢到缓存中
 		//bool ret = pClient->Send(pack); 
@@ -491,6 +491,7 @@ void CRemoteClientDlg::threadWatchData()
 					pStream->Write(pData, pClient->GetPack().strData.size(), &length);
 					LARGE_INTEGER bg = { 0 }; // 定义一个大整数对象，用于指定流中的位置
 					pStream->Seek(bg, STREAM_SEEK_SET, NULL);// 将流中的位置设置为开头
+
 					m_image.Load(pStream); // 从流中加载图像到 m_image 对象中
 					m_isFull = true;
 				}
@@ -641,12 +642,17 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+	m_isClosed = false;
+	
 	//防止无限启动线程
-	GetDlgItem(IDC_BTN_START_WATCH)->EnableWindow(FALSE); //将按钮设为失效
+	//GetDlgItem(IDC_BTN_START_WATCH)->EnableWindow(FALSE); //将按钮设为失效
 	//需要开启一个监视窗口
+	HANDLE hThread = (HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+
 	CWatchDialog dlg(this); //当自己定义了之后，alt+enter自动在上面加头文件
 	dlg.DoModal(); //弹出模态对话框
+	m_isClosed = true; //结束后将这个设置成true，这样线程中的循环就会结束
+	WaitForSingleObject(hThread, 500); 
 }
 
 

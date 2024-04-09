@@ -11,7 +11,7 @@ CPoint CWatchDialog::UserPoint2RemoteScreenPoint(CPoint& point, bool isScreen = 
 	//Ô¶³Ì¶ËµÄ×ø±ê×ª»»£ºµÈ±ÈËõ·Å
 	int width0 = clientRect.Width();
 	int height0 = clientRect.Height();
-	int width = 1920, height = 1080;
+	int width = m_nObjWidth, height = m_nObjHeight; //»¹ÊÇÓ¦¸Ã¶¯Ì¬µ÷Õû£¬¸ù¾Ý¶Ô·½µÄÆÁÄ»´óÐ¡
 
 	int x = point.x * width / width0; //µÈ±ÈËõ·Å
 	int y = point.y * height / height0;
@@ -39,6 +39,13 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 			CRect rect;
 			m_picture.GetWindowRect(rect);
 
+			if (m_nObjWidth == -1) {
+				m_nObjWidth = nParent->GetImage().GetWidth();
+			}
+
+			if (m_nObjHeight == -1) {
+				m_nObjHeight = nParent->GetImage().GetHeight();
+			}
 			//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
 			nParent->GetImage().StretchBlt(
 				m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
@@ -65,32 +72,36 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 
 void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
-	
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 0; //×ó¼ü
-	event.nAction = 2; //Ë«»÷
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event); 
-	//ÊÇÒ»ÖÖÈÃ²½£ºÖ»ÄÜ·¢ÏûÏ¢Î¯ÍÐÖ÷´°¿Ú·¢ËÍ°ü£¬ÒòÎª³õÊ¼»¯socketµÄ¹¦ÄÜ·ÅÔÚÁËÖ÷´°¿ÚÀàCRemoteClientDlgÖÐ£¬ÕâÊÇÒ»ÖÖñîºÏ
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 0; //×ó¼ü
+		event.nAction = 2; //Ë«»÷
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+
+	}
+//ÊÇÒ»ÖÖÈÃ²½£ºÖ»ÄÜ·¢ÏûÏ¢Î¯ÍÐÖ÷´°¿Ú·¢ËÍ°ü£¬ÒòÎª³õÊ¼»¯socketµÄ¹¦ÄÜ·ÅÔÚÁËÖ÷´°¿ÚÀàCRemoteClientDlgÖÐ£¬ÕâÊÇÒ»ÖÖñîºÏ
 	CDialog::OnLButtonDblClk(nFlags, point);
 }
 
 
 void CWatchDialog::OnLButtonDown(UINT nFlags, CPoint point)
 {
-	TRACE("x = %d y = %d\r\n", point.x, point.y);
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	TRACE("x = %d y = %d\r\n", point.x, point.y);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 0; //×ó¼ü
-	event.nAction = 2; //°´ÏÂ
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM)&event);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		TRACE("x = %d y = %d\r\n", point.x, point.y);
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		TRACE("x = %d y = %d\r\n", point.x, point.y);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 0; //×ó¼ü
+		event.nAction = 2; //°´ÏÂ
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	}
 
 	CDialog::OnLButtonDown(nFlags, point);
 }
@@ -99,14 +110,17 @@ void CWatchDialog::OnLButtonDown(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnLButtonUp(UINT nFlags, CPoint point)
 {
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 0; //×ó¼ü
-	event.nAction = 3; //µ¯Æð
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 0; //×ó¼ü
+		event.nAction = 3; //µ¯Æð
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+
+	}
 
 	CDialog::OnLButtonUp(nFlags, point);
 }
@@ -114,14 +128,17 @@ void CWatchDialog::OnLButtonUp(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnRButtonDblClk(UINT nFlags, CPoint point)
 {
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 1; //ÓÒ¼ü
-	event.nAction = 1; //Ë«»÷
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 1; //ÓÒ¼ü
+		event.nAction = 1; //Ë«»÷
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+
+	}
 
 	CDialog::OnRButtonDblClk(nFlags, point);
 }
@@ -129,16 +146,18 @@ void CWatchDialog::OnRButtonDblClk(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnRButtonDown(UINT nFlags, CPoint point)
 {
-	TRACE("x = %d y = %d\r\n", point.x, point.y);
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	TRACE("x = %d y = %d\r\n", point.x, point.y);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 1; //ÓÒ¼ü
-	event.nAction = 2; //°´ÏÂ TODO£º·þÎñ¶ËÒª×ö¶ÔÓ¦µÄÐÞ¸Ä
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		TRACE("x = %d y = %d\r\n", point.x, point.y);
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		TRACE("x = %d y = %d\r\n", point.x, point.y);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 1; //ÓÒ¼ü
+		event.nAction = 2; //°´ÏÂ TODO£º·þÎñ¶ËÒª×ö¶ÔÓ¦µÄÐÞ¸Ä
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	}
 
 	CDialog::OnRButtonDown(nFlags, point);
 }
@@ -146,14 +165,16 @@ void CWatchDialog::OnRButtonDown(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnRButtonUp(UINT nFlags, CPoint point)
 {
-	CPoint remote = UserPoint2RemoteScreenPoint(point);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 1; //ÓÒ¼ü
-	event.nAction = 3; //µ¯Æð
-	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
-	pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint remote = UserPoint2RemoteScreenPoint(point);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 1; //ÓÒ¼ü
+		event.nAction = 3; //µ¯Æð
+		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //µÃµ½¸¸´°¿Ú
+		pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
+	}
 
 	CDialog::OnRButtonUp(nFlags, point);
 }
@@ -161,12 +182,14 @@ void CWatchDialog::OnRButtonUp(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnMouseMove(UINT nFlags, CPoint point)  //ÔÚÀàÊÓÍ¼ÖÐÌí¼ÓµÄÐÅºÅ´¦Àíº¯Êý£¬µÃµ½µÄpoint×ø±ê¾ÍÊÇ
 {
-	CPoint remote = UserPoint2RemoteScreenPoint(point, false);
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 8; //ÒÆ¶¯²»¿¼ÂÇÊó±ê¼ü
-	event.nAction = 0; //ÒÆ¶¯
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint remote = UserPoint2RemoteScreenPoint(point, false);
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 8; //ÒÆ¶¯²»¿¼ÂÇÊó±ê¼ü
+		event.nAction = 0; //ÒÆ¶¯
+	}
 
 	CDialog::OnMouseMove(nFlags, point);
 }
@@ -175,15 +198,26 @@ void CWatchDialog::OnMouseMove(UINT nFlags, CPoint point)  //ÔÚÀàÊÓÍ¼ÖÐÌí¼ÓµÄÐÅº
 void CWatchDialog::OnStnClickedWatch()
 {
 	//Ò»¿ªÊ¼Ã»ÓÐ½øÈëÕâÀï
-	CPoint point;
-	GetCursorPos(&point);
-	CPoint remote = UserPoint2RemoteScreenPoint(point, true); //ÓÃMFC UIÖÐ¼ÓÈëµã»÷µÄÊÂ¼þ´¦Àíº¯ÊýÊ±£¬point×ø±ê¾ÍÊÇÈ«¾ÖµÄ×ø±ê£¬ÐèÒª½øÐÐ×ª»»
-	//·â×°
-	MouseEvent event;
-	event.ptXY = remote;
-	event.nButton = 0; //×ó¼ü
-	event.nAction = 0; //µ¥»÷
-	CClientSocket* pclient = CClientSocket::getInstance();
-	CPacket pack(5, (BYTE*)&event, sizeof(event));
-	pclient->Send(pack);
+	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+		CPoint point;
+		GetCursorPos(&point);
+		CPoint remote = UserPoint2RemoteScreenPoint(point, true); //ÓÃMFC UIÖÐ¼ÓÈëµã»÷µÄÊÂ¼þ´¦Àíº¯ÊýÊ±£¬point×ø±ê¾ÍÊÇÈ«¾ÖµÄ×ø±ê£¬ÐèÒª½øÐÐ×ª»»
+		//·â×°
+		MouseEvent event;
+		event.ptXY = remote;
+		event.nButton = 0; //×ó¼ü
+		event.nAction = 0; //µ¥»÷
+		CClientSocket* pclient = CClientSocket::getInstance();
+		CPacket pack(5, (BYTE*)&event, sizeof(event));
+		pclient->Send(pack);
+	}
+
+}
+
+
+void CWatchDialog::OnOK()
+{
+	// ÆÁ±ÎµôonOk£¬·ÀÖ¹°´»Ø³µ¼ü¹Ø±Õ´°¿Ú
+
+	//CDialog::OnOK();
 }
