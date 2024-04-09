@@ -331,9 +331,21 @@ unsigned __stdcall threadLockDlg(void* arg) {
     CRect rect;
     rect.left = 0;
     rect.top = 0;
-    rect.right = GetSystemMetrics(SM_CXFULLSCREEN) / 2;
+    rect.right = GetSystemMetrics(SM_CXFULLSCREEN) / 2; //w1
     rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN) / 2;
     dig.MoveWindow(rect);
+    
+    CWnd* pText = dig.GetDlgItem(IDC_STATIC);
+    if (pText) {
+        CRect rtText;
+        pText->GetWindowRect(rtText);
+        int nWidth = rtText.Width() / 2; //w0
+        int x = (rect.right - nWidth) / 2; //
+        int nHeight = rtText.Height();
+        int y = (rect.bottom - nHeight) / 2;
+        pText->MoveWindow(x, y, rtText.Width(), rtText.Height());
+    }
+
     dig.SetWindowPos(&dig.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE); //没有消息循环的话会立马消失
 
     TRACE("right = %d bottom = %d/r/n", rect.right, rect.bottom);
@@ -345,7 +357,7 @@ unsigned __stdcall threadLockDlg(void* arg) {
     rect.top = 0;
     rect.right = 1;
     rect.bottom = 1;
-    //ClipCursor(rect); //将鼠标限制在窗口范围内，只有一个像素点
+    ClipCursor(rect); //将鼠标限制在窗口范围内，只有一个像素点
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) { //对话框依赖消息循环
@@ -359,6 +371,7 @@ unsigned __stdcall threadLockDlg(void* arg) {
 
         }
     }
+    ClipCursor(NULL); //恢复鼠标
     dig.DestroyWindow(); //和上面的Create成对
     ShowCursor(true);
     ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW); //恢复任务栏
@@ -387,7 +400,7 @@ int UnLockMachine() {
     //::SendMessage(dig.m_hWnd, WM_KEYDOWN, 0x41, 0x01E0001); //全局送消息
     //！：以上两种送消息的方式都不会被另一个线程收到
     PostThreadMessage(threadId, WM_KEYDOWN, 0x1B, 0); //需要threadID
-    CPacket pack(7, NULL, 0);
+    CPacket pack(8, NULL, 0);
     CServerSocket::getInstance()->Send(pack);
     return 0;
 }

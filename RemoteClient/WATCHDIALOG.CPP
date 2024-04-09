@@ -217,7 +217,19 @@ void CWatchDialog::OnStnClickedWatch()
 
 void CWatchDialog::OnOK()
 {
-	// ÆÁ±ÎµôonOk£¬·ÀÖ¹°´»Ø³µ¼ü¹Ø±Õ´°¿Ú
 
-	//CDialog::OnOK();
+}
+
+
+void CWatchDialog::OnBnClickedLock()
+{
+	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent();
+	pParent->SendMessage(WM_SEND_PACKET, 7 << 1 | 1);
+}
+
+
+void CWatchDialog::OnBnClickedUnlock()
+{
+	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent();
+	pParent->SendMessage(WM_SEND_PACKET, 8 << 1 | 1);
 }

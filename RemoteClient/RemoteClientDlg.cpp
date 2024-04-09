@@ -629,7 +629,9 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case 6:
-		{
+	case 7:
+	case 8:
+		{ //6,7,8都是只发送一个命令没有data
 			ret = SendCommandPacket(cmd, wParam & 1, NULL, 0);
 		}
 		break;
