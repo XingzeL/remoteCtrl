@@ -162,6 +162,9 @@
   <ItemGroup>
     <ResourceCompile Include="Remote Control.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="remoteCtrl.uml" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

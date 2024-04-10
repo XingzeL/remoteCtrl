@@ -1,0 +1,22 @@
+@startuml
+class MyClass {
+    + myAttribute : int
+    + myMethod()
+}
+
+note right of MyClass
+  This is a note on the right
+end note
+
+note left of MyClass
+  This is a note on the left
+end note
+
+note top of MyClass
+  This is a note on top
+end note
+
+note bottom of MyClass
+  This is a note on the bottom
+end note
+@enduml
