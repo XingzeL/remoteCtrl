@@ -18,6 +18,19 @@ public:
 	CCommand();
     ~CCommand() {};
 	int ExecuteCommand(int nCmd);
+    static void RunCommand(void* arg, int status) {
+        CCommand* thiz = (CCommand*)arg;
+        if (status > 0) {
+            int ret = thiz->ExecuteCommand(status);
+            if (ret != 0) {
+                TRACE("执行命令失败：%d ret = %d\r\n", status, ret);
+            }
+        }
+        else {
+            MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败!"),
+                MB_OK | MB_ICONERROR);
+        }
+    } //声明成静态就可以不用对象直接让main中的Run调用
 
 protected:
 	typedef int(CCommand::* CMDFUNC)(); //成员函数指针

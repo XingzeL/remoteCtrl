@@ -32,35 +32,23 @@ int main() {
             nRetCode = 1;
         }
         else {
-            CCommand cmd;
+            CCommand cmd; 
             CServerSocket* pserver = CServerSocket::getInstance();
-            int count = 0;
-            if (pserver->InitSocket() == false) {
+
+            int ret = pserver->Run(&CCommand::RunCommand, &cmd); 
+            //在外面调用command类的静态函数,传入的参数是&cmd，是一个Command对象指针在里面作为thiz调用成员函数
+            switch (ret) {
+            case -1:
                 MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
                 exit(0);
+                break;
+            case -2:
+                MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), \
+                    MB_OK | MB_ICONERROR);
+                exit(0);
+                break;
             }
-            while (pserver) {
-                if (pserver->AcceptClient() == false) {
-                    if (count >= 3) {
-                        MessageBox(NULL, _T("多次无法正常进入用户，结束程序！"), _T("网络初始化失败"), \
-                            MB_OK | MB_ICONERROR);
-                        exit(0);
-                    }
-                    MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), \
-                        MB_OK | MB_ICONERROR);
-                    count++;
-                }
-                int ret = pserver->DealCommand();
-                if (ret != -1) {
-                    ret = cmd.ExecuteCommand(ret);
-                   
-                    if (ret != 0) {
-                        TRACE("执行命令失败，%d ret = %d\r\n", pserver->GetPacket().sCmd, ret);
-                    }
-                    pserver->CloseClient();
-                    TRACE("Command has done\r\n");
-                }
-            }
+                
         }
     }
     else {

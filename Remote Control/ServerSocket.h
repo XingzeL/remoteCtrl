@@ -143,6 +143,8 @@ typedef struct MouseEvent{
 	POINT ptXY; //坐标
 }MOUSEEV, *PMOUSEEV;
 
+typedef void(*SOCK_CALLBACK)(void* arg, int status); //定义一个callback
+
 class CServerSocket
 {
 public:
@@ -154,7 +156,7 @@ public:
 		return m_instance;
 	}
 
-	bool InitSocket() {
+	bool InitSocket(short port = 9527) {
 		
 		//TODO: 进行socket的校验
 		if (m_sock == -1) return false;
@@ -162,7 +164,7 @@ public:
 		memset(&serv_adr, 0, sizeof(serv_adr));
 		serv_adr.sin_family = AF_INET;
 		serv_adr.sin_addr.s_addr = INADDR_ANY; //所有的IP
-		serv_adr.sin_port = htons(9527);
+		serv_adr.sin_port = htons(port);
 		char errMsg[256]; // 定义用于存储错误信息的缓冲区
 		//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
 		// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
@@ -173,7 +175,36 @@ public:
 			return false;
 		}
 		if (listen(m_sock, 1) == -1) return false;
+		
+
 		return true;
+	}
+
+	int Run(SOCK_CALLBACK callback, void* arg, short port = 9527) {
+		//注册callback
+		bool ret = InitSocket(port);
+		if (ret == false) return -1; //错误码返回到上层，让外面进行错误处理
+
+		m_callback = callback;
+		m_arg = arg;
+
+		int count = 0;
+		while (true) {
+			if (AcceptClient() == false) {
+				if (count >= 3) {
+					return -2;
+				}
+				count++;
+			}
+			int ret = DealCommand();
+			if (ret > 0) {
+				m_callback(m_arg, ret);
+			}
+			CloseClient();
+		}
+
+		return 0;
+
 	}
 
 	bool AcceptClient() {
@@ -261,8 +292,11 @@ public:
 	}
 
 	void CloseClient() {
-		closesocket(m_client);
-		m_client = INVALID_SOCKET;
+		if (m_client != INVALID_SOCKET) {
+			closesocket(m_client);
+			m_client = INVALID_SOCKET;
+		}
+
 	}
 
 private: 
@@ -270,6 +304,9 @@ private:
 	SOCKET m_sock;
 	SOCKET m_client;
 	CPacket m_packet;
+	void* m_arg;  //callback函数和参数
+	SOCK_CALLBACK m_callback;
+
 	//单例模式：将构造和析构函数作为private
 	//拷贝构造
 	CServerSocket(const CServerSocket& ss) {}
