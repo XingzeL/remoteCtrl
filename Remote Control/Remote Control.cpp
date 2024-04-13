@@ -33,9 +33,8 @@ int main() {
         }
         else {
             CCommand cmd; 
-            CServerSocket* pserver = CServerSocket::getInstance();
+            int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
 
-            int ret = pserver->Run(&CCommand::RunCommand, &cmd); 
             //在外面调用command类的静态函数,传入的参数是&cmd，是一个Command对象指针在里面作为thiz调用成员函数
             switch (ret) {
             case -1:
