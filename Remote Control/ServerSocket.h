@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "framework.h"
+#include <list>
 
 //#define _CRT_SECURE_NO_WARNINGS
 #pragma pack(push)
@@ -143,7 +144,7 @@ typedef struct MouseEvent{
 	POINT ptXY; //坐标
 }MOUSEEV, *PMOUSEEV;
 
-typedef void(*SOCK_CALLBACK)(void* arg, int status); //定义一个callback
+typedef void(*SOCK_CALLBACK)(void* arg, int status, std::list<CPacket>&, CPacket& inPacket); //定义一个callback
 
 class CServerSocket
 {
@@ -185,6 +186,8 @@ public:
 		bool ret = InitSocket(port);
 		if (ret == false) return -1; //错误码返回到上层，让外面进行错误处理
 
+		std::list<CPacket> lstPackets;
+
 		m_callback = callback;
 		m_arg = arg;
 
@@ -198,7 +201,11 @@ public:
 			}
 			int ret = DealCommand();
 			if (ret > 0) {
-				m_callback(m_arg, ret);
+				m_callback(m_arg, ret, lstPackets, m_packet); //lstPackets将要传送的数据收集到网络模块
+				if (lstPackets.size() > 0) {
+					Send(lstPackets.front());
+					lstPackets.pop_front();
+				}
 			}
 			CloseClient();
 		}
