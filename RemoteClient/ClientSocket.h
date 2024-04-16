@@ -9,7 +9,7 @@
 #pragma pack(push)
 #pragma pack(1)
 
-void Dump(BYTE* pData, size_t nSize);
+//void Dump(BYTE* pData, size_t nSize);
 class CPacket {
 public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
