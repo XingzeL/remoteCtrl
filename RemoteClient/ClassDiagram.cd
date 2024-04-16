@@ -1,0 +1,132 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="CAboutDlg">
+    <Position X="7" Y="3.25" Width="1.5" />
+    <Compartments>
+      <Compartment Name="Nested Types" Collapsed="false" />
+    </Compartments>
+    <NestedTypes>
+      <Enum Name="CAboutDlg::__unnamed_enum_0646_1" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>RemoteClientDlg.cpp</NewMemberFileName>
+        </TypeIdentifier>
+      </Enum>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAABAABAAAAAAAAAAAAAAAAAAAAAAAAQ=</HashCode>
+      <FileName>RemoteClientDlg.cpp</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CPacket" Collapsed="true">
+    <Position X="10.5" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAIIAAAAAACIgAEAAAAAAAAAAAAAABAAAAAgABAACAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CClientSocket">
+    <Position X="8.75" Y="3.25" Width="1.5" />
+    <Compartments>
+      <Compartment Name="Nested Types" Collapsed="false" />
+    </Compartments>
+    <NestedTypes>
+      <Class Name="CClientSocket::CHelper">
+        <TypeIdentifier>
+          <NewMemberFileName>ClientSocket.h</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>IIAAAAQgAAAABIQAEEAAAEAAAAAFAAQIECAkAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CRemoteClientApp" Collapsed="true">
+    <Position X="7" Y="6.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAEAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAA=</HashCode>
+      <FileName>RemoteClient.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CRemoteClientDlg" Collapsed="true">
+    <Position X="8.75" Y="10.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>1ACAQAMAkASgAAQIAJCAGIAYFCAGBEQBBMgACAAQEQQ=</HashCode>
+      <FileName>RemoteClientDlg.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CStatusDlg">
+    <Position X="13" Y="3.25" Width="1.5" />
+    <NestedTypes>
+      <Enum Name="CStatusDlg::__unnamed_enum_07d2_1" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>StatusDlg.h</NewMemberFileName>
+        </TypeIdentifier>
+      </Enum>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>AAAgAACAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAABAA=</HashCode>
+      <FileName>StatusDlg.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CWatchDialog">
+    <Position X="7" Y="8.25" Width="1.5" />
+    <Compartments>
+      <Compartment Name="Nested Types" Collapsed="false" />
+    </Compartments>
+    <NestedTypes>
+      <Enum Name="CWatchDialog::__unnamed_enum_07e5_1">
+        <TypeIdentifier>
+          <NewMemberFileName>WatchDialog.h</NewMemberFileName>
+        </TypeIdentifier>
+      </Enum>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>AAAAAAEAAIAAACAAALAIIABFABAAAAAAAAACAAAQaAA=</HashCode>
+      <FileName>WatchDialog.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Struct Name="file_info" Collapsed="true">
+    <Position X="4.5" Y="5.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAgAgAAAAAAAAAAAAIAQAAAAAAAEAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="MouseEvent" Collapsed="true">
+    <Position X="0.5" Y="5.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAgAAAAAAAAAACAAAAAAABAAAAAAAAAAAAAAAAAAQA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Typedef Name="FILEINFO" Collapsed="true">
+    <Position X="4.5" Y="7.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Typedef>
+  <Typedef Name="PFILEINFO" Collapsed="true">
+    <Position X="4.5" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Typedef>
+  <Typedef Name="MOUSEEV" Collapsed="true">
+    <Position X="0.5" Y="7.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Typedef>
+  <Typedef Name="PMOUSEEV" Collapsed="true">
+    <Position X="0.5" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>ClientSocket.h</FileName>
+    </TypeIdentifier>
+  </Typedef>
+  <Font Name="Microsoft YaHei UI" Size="9" />
+</ClassDiagram>
