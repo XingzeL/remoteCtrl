@@ -98,7 +98,7 @@ public:
 		return nLength + 6;
 	}
 
-	const char* Data() {
+	const char* Data(std::string& strOut) const { //3.加入const后缀，不会修改对象本身
 		strOut.resize(nLength + 6);
 		BYTE* pData = (BYTE*)strOut.c_str();
 		//填数据
@@ -163,7 +163,7 @@ public:
 		return m_instance;
 	}
 
-	bool InitSocket(int nIp, int port) {
+	bool InitSocket() {
 		//修改的bug：因为每次送消息都会关闭连接，client不能像server一样socket只初始化一次
 		// 每次Inite都要初始化m_sock
 		
@@ -176,8 +176,8 @@ public:
 		serv_adr.sin_family = AF_INET;
 		//serv_adr.sin_addr.s_addr = inet_addr("127.0.0.1");
 		//TRACE("addr: %08X nIP %08X\r\n", serv_adr.sin_addr.s_addr, nIp);
-		serv_adr.sin_addr.s_addr = htonl(nIp);
-		serv_adr.sin_port = htons(port);
+		serv_adr.sin_addr.s_addr = htonl(m_nIP);
+		serv_adr.sin_port = htons(m_nPort);
 		//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
 		// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
 		
@@ -240,9 +240,11 @@ public:
 		return send(m_sock, pData, nSize, 0) > 0;
 	}
 
-	bool Send(CPacket& pack) {
+	bool Send(const CPacket& pack) { //1.将参数改变成const
 		if (m_sock == -1) return false;
-		return send(m_sock, pack.Data(), pack.Size(), 0) > 0;
+		std::string strOut;
+		pack.Data(strOut); //2.const参数只能调用有const后缀的函数
+		return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 	}
 
 	bool GetFilePath(std::string& strPath) {
@@ -272,18 +274,32 @@ public:
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET; //-1
 	}
+
+	void UpdateAddress(int nIP, int nPort) {
+		m_nIP = nIP;
+		m_nPort = nPort;
+	}
+
 private:
 
+	//M层：加入IP和Port的信息
+	int m_nIP;
+	int m_nPort;
 	std::vector<char> m_buffer; //可以直接用名字取地址
 	SOCKET m_sock;
 	CPacket m_packet;
 	//单例模式：将构造和析构函数作为private
 	//拷贝构造
-	CClientSocket(const CClientSocket& ss) {}
-	CClientSocket& operator=(const CClientSocket& ss) {
+	CClientSocket(const CClientSocket& ss)
+	{
 		m_sock = ss.m_sock;
+		m_nIP = ss.m_nIP;
+		m_nPort = ss.m_nPort;
 	}
-	CClientSocket()
+
+	CClientSocket& operator=(const CClientSocket& ss) {}
+	CClientSocket() :
+		m_nIP(INADDR_ANY), m_nPort(0)
 	{
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);

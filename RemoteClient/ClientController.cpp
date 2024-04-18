@@ -100,12 +100,16 @@ void CClientController::threadFunc() //控制层的线程，消息处理
 
 LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-    return LRESULT();
+    CClientSocket* pClient = CClientSocket::getInstance();
+    CPacket* pPacket = (CPacket*)wParam;
+    return pClient->Send(*pPacket); //发送包;
 }
 
 LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-    return LRESULT();
+    CClientSocket* pClient = CClientSocket::getInstance();
+    char* pBuffer = (char*)wParam;
+    return pClient->Send(pBuffer, (int)lParam); //发送包;
 }
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
