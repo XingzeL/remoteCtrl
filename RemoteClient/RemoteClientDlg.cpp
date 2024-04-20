@@ -367,47 +367,6 @@ void CRemoteClientDlg::LoadFileCurrent()
 	CClientController::getInstance()->CloseSocket();
 }
 
-//void CRemoteClientDlg::threadEntryForWatchData(void* arg)
-//{
-//	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
-//	thiz->threadWatchData();
-//	_endthread();
-//}
-//
-//void CRemoteClientDlg::threadWatchData() //可能存在异步问题导致程序崩溃
-//{
-//	Sleep(50); //线程应该比显示窗口后跑起来
-//
-//	CClientController* pCtrl = CClientController::getInstance();
-//
-//	while (!m_isClosed) {
-//
-//		if (m_isFull == false) {
-//
-//			int ret = pCtrl->SendCommandPacket(6);
-//			if (ret == 6) {
-//				if (pCtrl->GetImage(m_image) == 0) {
-//					m_isFull = true;
-//				}
-//				else
-//				{
-//					TRACE("获取图片失败！\r\n");
-//				}
-//			}
-//			else {
-//				Sleep(1);
-//			}
-//		}
-//
-//		else {
-//			Sleep(1); //休眠1ms，防止网络断开的时候占用大量CPU重试
-//		}
-//	}
-//
-//
-//}
-
-
 void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
 {
 	HTREEITEM hSub = NULL;

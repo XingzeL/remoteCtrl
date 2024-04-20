@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "WatchDialog.h"
 #include "RemoteClientDlg.h"
+#include "ClientController.h"
 
 CPoint CWatchDialog::UserPoint2RemoteScreenPoint(CPoint& point, bool isScreen = false)
 {
