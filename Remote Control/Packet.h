@@ -35,7 +35,7 @@ public:
 		sSum = pack.sSum;
 	}
 
-	CPacket(const BYTE* pData, size_t& nSize) {
+	CPacket(const BYTE* pData, size_t& nSize) { //这里的nSize是一个引用，能够返回解包了多少数据
 		//用于解析数据的构造函数
 		size_t i;
 		for (i = 0; i < nSize; i++) {

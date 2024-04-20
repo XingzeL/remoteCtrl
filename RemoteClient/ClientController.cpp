@@ -52,6 +52,110 @@ LRESULT CClientController::SendMessage(MSG msg)
     return info.result; //拿到消息处理的返回值
 }
 
+void CClientController::StartWatchScreen()
+{
+    m_isClosed = false;
+    CWatchDialog dlg(&m_remoteDlg);
+    m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreenEntry,
+        0, this);
+    dlg.DoModal();
+    m_isClosed = true;
+    WaitForSingleObject(m_hThreadWatch, 500);
+}
+
+void CClientController::threadWatchScreen()
+{
+    Sleep(50);
+    while (!m_isClosed) {
+        if (m_remoteDlg.isFull() == false) {
+            int ret = SendCommandPacket(6);
+            if (ret == 6) {
+     
+                if (GetImage(m_remoteDlg.GetImage()) == 0) {
+
+                    m_remoteDlg.SetImageStatus(true);
+                }
+                else {
+                    TRACE("获取图片失败! ret = %d\r\n", ret);
+                }
+            }
+        }
+        Sleep(1);
+    }
+
+}
+
+void CClientController::threadWatchScreenEntry(void* arg)
+{
+    CClientController* thiz = (CClientController*)arg;
+    thiz->threadWatchScreen();
+    _endthread();
+}
+
+void CClientController::threadDownloadFile()
+{
+    FILE* pFile = fopen(m_strLocal, "wb+");
+    if (pFile == NULL) {
+        AfxMessageBox("本地没有权限保存该文件或者无法创建文件！！");
+        m_statusDlg.ShowWindow(SW_HIDE);
+        m_remoteDlg.EndWaitCursor(); //结束光标的沙漏
+        return;
+    }
+    CClientSocket* pClient = CClientSocket::getInstance();
+
+    do {
+
+        //int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)strFile, strFile.GetLength()); //1.原先在V层直接调用发送包的函数，出现updata界面冲突
+
+        //int ret = SendMessage(WM_SEND_PACKET, 4 << 1 | 0, (LPARAM)(LPCSTR)strFile); //2.改为在V层发送消息，主线程接收后进行包的发送
+        int ret = SendCommandPacket(4, false,
+            (BYTE*)(LPCSTR)m_strRemote,
+            m_strRemote.GetLength());  //
+
+        if (ret < 0) {
+            AfxMessageBox(_T("执行下载命令失败!!!"));
+            TRACE("执行下载失败: ret = %d\r\n", ret);
+            break;
+        }
+        //进行接收
+        //1.longlong 长度  
+
+        long long nlength = *(long long*)CClientSocket::getInstance()->GetPack().strData.c_str();
+        if (nlength == 0) {
+            AfxMessageBox("文件长度为零或者无法读取文件！！");
+            break; //跳出do的循环，进入外面的关闭连接
+        }
+
+        long long nCount = 0; //维护接收的长度信息
+        //接收文件：用fopen核fwrite
+        //用一个模态的对话框
+        while (nCount < nlength) {
+            ret = pClient->DealCommand();
+            if (ret < 0) {
+                AfxMessageBox("传输失败!");
+                TRACE("传输失败：ret = %d\r\n", ret);
+                break;
+            }
+
+            fwrite(pClient->GetPack().strData.c_str(), 1, pClient->GetPack().strData.size(), pFile);
+            nCount += pClient->GetPack().strData.size();
+        }
+    } while (false);
+    fclose(pFile);
+    pClient->CloseSocket();
+    m_statusDlg.ShowWindow(SW_HIDE);
+    m_remoteDlg.EndWaitCursor();
+    m_remoteDlg.MessageBox(_T("下载完成！"), _T("完成"));
+}
+
+void CClientController::threadDownloadEntry(void* arg)
+{
+    //thiz法：将静态成员函数转换成能访问this的对象成员函数
+    CClientController* thiz = (CClientController*)arg;
+    thiz->threadDownloadFile();
+    _endthread();
+}
+
 unsigned __stdcall CClientController::threadEntry(void* arg)
 {
     CClientController* thiz = (CClientController*)arg;

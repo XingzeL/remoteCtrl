@@ -258,7 +258,7 @@ protected:
         if (pFile != NULL) {
             fseek(pFile, 0, SEEK_END); //将文件指针进行一次偏移
             data = _ftelli64(pFile); //拿文件的长度
-            CPacket head(4, (BYTE*)&data, 8);
+            CPacket head(4, (BYTE*)&data, 8); //先发送一个文件长度的信息
             lsPacket.push_back(head);
             fseek(pFile, 0, SEEK_SET); //将文件指针偏移重置回开头
 
@@ -266,7 +266,7 @@ protected:
             size_t rlen = 0;
             do {
                 rlen = fread(buffer, 1, 1024, pFile);
-                CPacket pack(4, (BYTE*)buffer, rlen);
+                CPacket pack(4, (BYTE*)buffer, rlen); //循环发送文件内容
                 lsPacket.push_back(pack);
             } while (rlen >= 1024); //小于的话说明读到尾巴了
 
@@ -398,7 +398,7 @@ protected:
             PBYTE pData = (PBYTE)GlobalLock(hMem);
 
             SIZE_T nSize = GlobalSize(hMem);
-            CPacket pack(6, pData, nSize);
+            CPacket pack(6, pData, nSize);  //发送图片：直接将图片打包
             lsPacket.push_back(pack);
             GlobalUnlock(hMem);
         }

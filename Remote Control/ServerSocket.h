@@ -43,12 +43,16 @@ public:
 		return m_instance;
 	}
 
-	int Run(SOCK_CALLBACK callback, void* arg, short port = 9527) {
-		//注册callback
+	int Run(SOCK_CALLBACK callback, void* arg, short port = 9527) { 
+		/*
+			主函数注册了callback，在网络模块中运行这个函数
+			callback函数让功能和网络模块分离开来，只有传参的联系
+		*/
+		
 		bool ret = InitSocket(port);
 		if (ret == false) return -1; //错误码返回到上层，让外面进行错误处理
 
-		std::list<CPacket> lstPackets;
+		std::list<CPacket> lstPackets; //package队列，用于收集处理函数要发送的包
 
 		m_callback = callback;
 		m_arg = arg;
@@ -64,7 +68,7 @@ public:
 			int ret = DealCommand();
 			if (ret > 0) {
 				m_callback(m_arg, ret, lstPackets, m_packet); //lstPackets将要传送的数据收集到网络模块
-				while (lstPackets.size() > 0) { //全部发送
+				while (lstPackets.size() > 0) { //全部发送，网络类只管发送数据，是什么不重要
 					Send(lstPackets.front());
 					lstPackets.pop_front();
 				}
@@ -153,12 +157,12 @@ protected:  //除了启动，都保护起来
 		return -1; //意外情况
 	}
 
-	bool Send(const char* pData, int nSize) {
+	bool Send(const char* pData, int nSize) {  //直接将数据发送出去
 		if (m_client == -1) return false;
 		return send(m_client, pData, nSize, 0) > 0;
 	}
 
-	bool Send(CPacket& pack) {
+	bool Send(CPacket& pack) {  //将包发送出去
 		if (m_client == -1) return false;
 		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}

@@ -72,12 +72,49 @@ public:
 		return Cutils::Bytes2Image(image, pClient->GetPack().strData);
 	}
 
+	int DownFile(CString strPath) {
+		CFileDialog dlg(FALSE, "*",
+			strPath,
+			OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, NULL,
+			&m_remoteDlg); //有一个默认后缀
+
+		if (dlg.DoModal() == IDOK) {
+			m_strRemote = strPath;
+			m_strLocal = dlg.GetPathName();
+			CString strLocal = dlg.GetPathName(); //MFC的API,得到路径，想要传入线程中
+			/*****************添加线程函数****************/
+			m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+			//_beginthreadex是想要拿到线程ID的时候使用,里面传入的函数指针需要是unsigned __stdcall
+
+			if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+				//说明线程被创建还不会立刻结束，所以等待超时说明线程被成功创建,否则就是失败
+				return -1;
+			}
+			m_remoteDlg.BeginWaitCursor();
+			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中"));
+			m_statusDlg.ShowWindow(SW_SHOW);
+			m_statusDlg.CenterWindow(&m_remoteDlg);
+			m_statusDlg.SetActiveWindow();
+			//Sleep(50); //进行一些延时，等待鼠标位置被拿到
+		}
+		return 0;
+	}
+
+	void StartWatchScreen();
+
 protected:
+	void threadWatchScreen();
+	static void threadWatchScreenEntry(void *arg);
+	void threadDownloadFile();
+	//static unsigned __stdcall threadDownloadEntry(void* arg) {}
+	static void threadDownloadEntry(void* arg);
 
 	CClientController():m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) { //设置了一些对象的父对象
+		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
+		m_hThreadWatch = INVALID_HANDLE_VALUE;
 		m_nThreadID = -1;
-
+		m_isClosed = true;
 	}
 
 	~CClientController() {
@@ -128,11 +165,17 @@ private:
 	static std::map<UINT, MSGFUNC> m_mapFunc;
 	//std::map<UUID, PMSGINFO> m_mapMessage;
 	//对话框对象
-	CWatchDialog m_watchDlg;
-	CRemoteClientDlg m_remoteDlg;
-	CStatusDlg m_statusDlg;
+	CWatchDialog m_watchDlg; //远程监视窗口
+	CRemoteClientDlg m_remoteDlg; //界面主窗口
+	CStatusDlg m_statusDlg;  //状态弹窗
 	HANDLE m_hThread;
+	HANDLE m_hThreadDownload; //处理意外情况：文件还在下载但是程序结束了，需要一个handle来管理下载线程
+	CString m_strRemote; //下载文件的远程路径
+	CString m_strLocal; //下载到本地的路径
 	unsigned m_nThreadID;
+	HANDLE m_hThreadWatch;
+	bool m_isClosed; //监视是否关闭
+
 	static CClientController* m_instance;
 	class CHelper {
 		//helper访问socket的成员，helper被释放的时候会连带delete单例对象

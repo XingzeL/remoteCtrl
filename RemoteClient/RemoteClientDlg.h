@@ -29,10 +29,10 @@ public:
 	CString GetPath(HTREEITEM hTree);
 	void LoadFileInfo();
 	void LoadFileCurrent();
-	static void threadEntryForDownLoadFile(void* arg);
-	static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this
-	void threadDownFile();
-	void threadWatchData(); //成员函数可以访问this指针
+	//static void threadEntryForDownLoadFile(void* arg);
+	//static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this
+	//void threadDownFile();
+	//void threadWatchData(); //成员函数可以访问this指针
 public:
 	bool isFull() const { //不会修改任何成员，内部改变的话报错
 		return m_isFull;
