@@ -34,14 +34,9 @@ public:
 	//void threadDownFile();
 	//void threadWatchData(); //成员函数可以访问this指针
 public:
-	bool isFull() const { //不会修改任何成员，内部改变的话报错
-		return m_isFull;
-	}
+
 	CImage& GetImage() {
 		return m_image;
-	}
-	void SetImageStatus(bool isFull = false) {
-		m_isFull = isFull;
 	}
 
 private:

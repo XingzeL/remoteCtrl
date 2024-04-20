@@ -11,8 +11,12 @@ class CWatchDialog : public CDialog
 public:
 	CWatchDialog(CWnd* pParent = nullptr);   // 标准构造函数
 	virtual ~CWatchDialog();
-
-
+	bool isFull() const { //不会修改任何成员，内部改变的话报错
+		return m_isFull;
+	}
+	void SetImageStatus(bool isFull = false) {
+		m_isFull = isFull;
+	}
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_DLG_WATCH };
@@ -20,9 +24,12 @@ public:
 public:
 	int m_nObjWidth;
 	int m_nObjHeight;
+	bool m_isFull;
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
+
+
 
 	DECLARE_MESSAGE_MAP()
 public:

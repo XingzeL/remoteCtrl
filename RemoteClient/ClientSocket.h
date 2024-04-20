@@ -98,6 +98,11 @@ public:
 		return nLength + 6;
 	}
 
+	/*
+		原本Data函数是没有参数的，而是改变CPacket的成员变量，
+		在进行发送的时候将数据打包到strOut并返回
+	*/
+
 	const char* Data(std::string& strOut) const { //3.加入const后缀，不会修改对象本身
 		strOut.resize(nLength + 6);
 		BYTE* pData = (BYTE*)strOut.c_str();
@@ -202,7 +207,7 @@ public:
 	int DealCommand() { //接收服务器的响应，解析一个packet，返回值为响应的命令值
 		if (m_sock == -1) return false;
 		//char buffer[1024] = "";
-		char* buffer = m_buffer.data(); 
+		char* buffer = m_buffer.data();  //TODO:多线程发送命令时可能会出现冲突
 		//原来没有delete掉的原因：buffer不确定是长连接还是短链接
 
 		if (buffer == NULL) {
@@ -213,7 +218,7 @@ public:
 		static size_t index = 0; //index设为static，下次进入DealCommand的时候继续接收而不是清空
 		while (true) {
 			size_t len = recv(m_sock, buffer + index, BUFFERSIZE - index, 0);
-			if ((len <= 0) && (index == 0)) { //10.3.3(解决文件接收bug)加入index == 0的判断：index代表缓冲区中还剩的数据是否读完；len代表本次recv读取失败
+			if (((int)len <= 0) && ((int)index == 0)) { //10.3.3(解决文件接收bug)加入index == 0的判断：index代表缓冲区中还剩的数据是否读完；len代表本次recv读取失败
 				//delete[]buffer; //短连接的情况：只处理一次cmd之后可以不用了
 				TRACE("出现读包的问题！");
 				return -1;
@@ -240,10 +245,16 @@ public:
 		return send(m_sock, pData, nSize, 0) > 0;
 	}
 
+	/*
+	  原本Send传入的不是const pack，在进行网络的send的时候会用Data()改变pack中的内容
+	  在C层重构中的发送接口传入的是const(为了低耦合性), 这个改变pack自身的函数需要修改：
+	  从调用原版Data()改变pack的strOut成员改成一个局部变量作为参数传给新的Data(string&)
+	  这样改变的就是这个参数而不是pack，满足了C层的函数要求
+	 */
 	bool Send(const CPacket& pack) { //1.将参数改变成const
 		if (m_sock == -1) return false;
 		std::string strOut;
-		pack.Data(strOut); //2.const参数只能调用有const后缀的函数
+		pack.Data(strOut); //2.const参数只能调用有const后缀的函数,不会改变pack，Data函数会改变strOut
 		return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 	}
 
@@ -329,6 +340,7 @@ private:
 		if (m_instance != NULL) {
 			CClientSocket* tmp = m_instance;
 			m_instance = NULL;
+			TRACE("Socket has been released!\r\n");
 			delete tmp; //显示释放堆内存
 		}
 	}

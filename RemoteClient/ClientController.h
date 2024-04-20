@@ -54,53 +54,15 @@ public:
 	// 8 解锁
 	// 1981 测试连接
 	// 返回值是命令号
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, 
-		BYTE* pData = NULL, size_t nLength = 0) {
-
-		CClientSocket* pClient = CClientSocket::getInstance();
-		if (pClient->InitSocket() == false) return false;
-		pClient->Send(CPacket(nCmd, pData, nLength));
-		int cmd = DealCommand(); //去接收
-
-		if (bAutoClose) {
-			CloseSocket();
-		}
-
-		return cmd;
-	}
+	int SendCommandPacket(int nCmd, bool bAutoClose = true,
+		BYTE* pData = NULL, size_t nLength = 0);
 
 	int GetImage(CImage& image) { //mem to image的功能，可以封装走
 		CClientSocket* pClient = CClientSocket::getInstance();
 		return Cutils::Bytes2Image(image, pClient->GetPack().strData);
 	}
 
-	int DownFile(CString strPath) {
-		CFileDialog dlg(FALSE, "*",
-			strPath,
-			OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, NULL,
-			&m_remoteDlg); //有一个默认后缀
-
-		if (dlg.DoModal() == IDOK) {
-			m_strRemote = strPath;
-			m_strLocal = dlg.GetPathName();
-			CString strLocal = dlg.GetPathName(); //MFC的API,得到路径，想要传入线程中
-			/*****************添加线程函数****************/
-			m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-			//_beginthreadex是想要拿到线程ID的时候使用,里面传入的函数指针需要是unsigned __stdcall
-
-			if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
-				//说明线程被创建还不会立刻结束，所以等待超时说明线程被成功创建,否则就是失败
-				return -1;
-			}
-			m_remoteDlg.BeginWaitCursor();
-			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中"));
-			m_statusDlg.ShowWindow(SW_SHOW);
-			m_statusDlg.CenterWindow(&m_remoteDlg);
-			m_statusDlg.SetActiveWindow();
-			//Sleep(50); //进行一些延时，等待鼠标位置被拿到
-		}
-		return 0;
-	}
+	int DownFile(CString strPath);
 
 	void StartWatchScreen();
 
@@ -128,6 +90,7 @@ protected:
 	static void releaseInstance() {
 		if (m_instance != NULL) {
 			delete m_instance;
+			TRACE("controller has released!\r\n");
 			m_instance = NULL;
 		}
 	}
@@ -183,7 +146,7 @@ private:
 		//helper访问socket的成员，helper被释放的时候会连带delete单例对象
 	public:
 		CHelper() {
-			CClientController::getInstance(); //使用全局函数的时候要加上域
+			//CClientController::getInstance(); //使用全局函数的时候要加上域
 		}
 		~CHelper() {
 			CClientController::releaseInstance();

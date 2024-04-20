@@ -14,6 +14,7 @@ IMPLEMENT_DYNAMIC(CWatchDialog, CDialog)
 CWatchDialog::CWatchDialog(CWnd* pParent /*=nullptr*/)
 	: CDialog(IDD_DLG_WATCH, pParent)
 {
+	m_isFull = false;
 	m_nObjHeight = -1;
 	m_nObjWidth = -1;
 }

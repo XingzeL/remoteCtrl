@@ -5,11 +5,13 @@
 //注意：静态变量成员变量需要在cpp中声明一下，非静态变量就是构造的时候初始化
 std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;
 CClientController* CClientController::m_instance = NULL;
+CClientController::CHelper CClientController::m_helper; //出现
 
 CClientController* CClientController::getInstance()
 {
     if (m_instance == NULL) {
         m_instance = new CClientController();
+        TRACE("CClientController size is %d\r\n", sizeof(*m_instance));
         struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = {
             {WM_SEND_PACK, &CClientController::OnSendPack},
             {WM_SEND_DATA, &CClientController::OnSendData},
@@ -21,7 +23,8 @@ CClientController* CClientController::getInstance()
             m_mapFunc.insert(std::pair<UINT, MSGFUNC>(MsgFuncs[i].nMsg, MsgFuncs[i].func));
         }
     }
-    return nullptr;
+    //return nullptr; //这里写错成nullptr导致开启线程时访问了非法地址
+    return m_instance;
 }
 
 int CClientController::Invoke(CWnd*& pMainWnd)
@@ -52,13 +55,56 @@ LRESULT CClientController::SendMessage(MSG msg)
     return info.result; //拿到消息处理的返回值
 }
 
+int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+{
+    CClientSocket* pClient = CClientSocket::getInstance();
+    if (pClient->InitSocket() == false) return false;
+    pClient->Send(CPacket(nCmd, pData, nLength));
+    int cmd = DealCommand(); //去接收
+
+    if (bAutoClose) {
+        CloseSocket();
+    }
+
+    return cmd;
+}
+
+int CClientController::DownFile(CString strPath)
+{
+    CFileDialog dlg(FALSE, "*",
+        strPath,
+        OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, NULL,
+        &m_remoteDlg); //有一个默认后缀
+
+    if (dlg.DoModal() == IDOK) {
+        m_strRemote = strPath;
+        m_strLocal = dlg.GetPathName();
+        CString strLocal = dlg.GetPathName(); //MFC的API,得到路径，想要传入线程中
+        /*****************添加线程函数****************/
+        m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+        //_beginthreadex是想要拿到线程ID的时候使用,里面传入的函数指针需要是unsigned __stdcall
+
+        if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+            //说明线程被创建还不会立刻结束，所以等待超时说明线程被成功创建,否则就是失败
+            return -1;
+        }
+        m_remoteDlg.BeginWaitCursor();
+        m_statusDlg.m_info.SetWindowText(_T("命令正在执行中"));
+        m_statusDlg.ShowWindow(SW_SHOW);
+        m_statusDlg.CenterWindow(&m_remoteDlg);
+        m_statusDlg.SetActiveWindow();
+        //Sleep(50); //进行一些延时，等待鼠标位置被拿到
+    }
+    return 0;
+}
+
 void CClientController::StartWatchScreen()
 {
     m_isClosed = false;
-    CWatchDialog dlg(&m_remoteDlg);
+    //CWatchDialog dlg(&m_remoteDlg);//这个是重构前的新建一个界面，但是c层需要用成员m_watchDlg
     m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreenEntry,
         0, this);
-    dlg.DoModal();
+    m_watchDlg.DoModal(); //启动监视窗口
     m_isClosed = true;
     WaitForSingleObject(m_hThreadWatch, 500);
 }
@@ -67,13 +113,13 @@ void CClientController::threadWatchScreen()
 {
     Sleep(50);
     while (!m_isClosed) {
-        if (m_remoteDlg.isFull() == false) {
-            int ret = SendCommandPacket(6);
+        if (m_watchDlg.isFull() == false) {
+            int ret = SendCommandPacket(6);  //与M层交互，发送命令
             if (ret == 6) {
      
                 if (GetImage(m_remoteDlg.GetImage()) == 0) {
 
-                    m_remoteDlg.SetImageStatus(true);
+                    m_watchDlg.SetImageStatus(true);
                 }
                 else {
                     TRACE("获取图片失败! ret = %d\r\n", ret);
