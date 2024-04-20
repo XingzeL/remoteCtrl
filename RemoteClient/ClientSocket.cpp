@@ -24,3 +24,51 @@ std::string GetErrorInfo(int wsaErrCode) {
 	return ret;
 }
 
+void CClientSocket::threadEntry(void* arg)
+{
+	CClientSocket* thiz = (CClientSocket*)arg;
+	thiz->threadFunc();
+}
+
+void CClientSocket::threadFunc() //开一个线程来接收数据
+{
+	if (InitSocket() == false) {
+		return;
+	}
+	std::string strBuffer;
+	strBuffer.resize(BUFFERSIZE);
+	char* pBuffer = (char*)strBuffer.c_str();
+	int index = 0; //index:一共读取了多少字节
+	while (m_sock != INVALID_SOCKET) {
+		if (m_lstSend.size() > 0) {
+			//说明有数据要发送
+			CPacket& head = m_lstSend.front();
+			if (Send(head) == false) {
+				TRACE("发送失败\r\n");
+				continue;
+			}
+			auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>>(head.hEvent, std::list<CPacket>()));
+			
+			int length = recv(m_sock, pBuffer, BUFFERSIZE - index, 0);
+			if (length > 0 || index > 0) { //读取成功
+				//解包
+				index += length;
+				size_t size = (size_t)index;
+				CPacket pack((BYTE*)pBuffer, size); //解包，size是引用
+				//监控的时候发送一个命令，回来一个pack，但是有多个TCP包；
+				//传文件的时候发送一个命令，回来多个pack，如果接收到一次就pop_front，后续的包就拿不到对应的handle，需要解决
+				if (size > 0) {
+					//TODO：通知对应的事件
+					pack.hEvent = head.hEvent;
+					pr.first->second.push_back(pack); //pr是个pair，第二个元素是bool
+					SetEvent(head.hEvent);
+				}
+			}
+
+			else if (length == 0 && index <= 0) {
+				CloseSocket();
+			}
+			m_lstSend.pop_front();
+		}
+	}
+}

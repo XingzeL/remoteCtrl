@@ -4,6 +4,8 @@
 #include <string>
 #include "framework.h"
 #include <vector>
+#include <list>
+#include <map>
 
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
@@ -15,7 +17,7 @@ public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
 
 	//打包的重构
-	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {
 		sHead = 0xFEFF;
 		nLength = nSize + 4;
 		sCmd = nCmd;
@@ -30,6 +32,7 @@ public:
 		for (size_t j = 0; j < strData.size(); j++) {
 			sSum += BYTE(strData[j]) & 0xFF;
 		}
+		this->hEvent = hEvent; //传递一个event
 	}
 
 	CPacket(const CPacket& pack) {
@@ -38,9 +41,10 @@ public:
 		sCmd = pack.sCmd;
 		strData = pack.strData;
 		sSum = pack.sSum;
+		hEvent = pack.hEvent;
 	}
 
-	CPacket(const BYTE* pData, size_t& nSize) {
+	CPacket(const BYTE* pData, size_t& nSize):hEvent(INVALID_HANDLE_VALUE){
 		//用于解析数据的构造函数
 		size_t i;
 		for (i = 0; i < nSize; i++) {
@@ -90,6 +94,7 @@ public:
 			sCmd = pack.sCmd;
 			strData = pack.strData;
 			sSum = pack.sSum;
+			hEvent = pack.hEvent;
 		}
 		return *this;
 	}
@@ -122,7 +127,8 @@ public:
 	WORD sCmd; //远控命令
 	std::string strData; //包数据
 	WORD sSum; //和校验
-	std::string strOut; //整个包的数据
+	//std::string strOut; //整个包的数据
+	HANDLE hEvent; //用于发送数据的时候
 };
 #pragma pack(pop)
 
@@ -292,7 +298,10 @@ public:
 	}
 
 private:
-
+	std::list<CPacket> m_lstSend; //要发送的数据
+	std::map<HANDLE, std::list<CPacket>> m_mapAck; //认为对方会应答一系列的包；
+	//如果用vector，数量不稳定时候开销很大：随着空间的增大，push_back消耗的时间指数增加
+	
 	//M层：加入IP和Port的信息
 	int m_nIP;
 	int m_nPort;
@@ -322,12 +331,17 @@ private:
 	}
 	~CClientSocket() {
 		closesocket(m_sock);
+		m_sock = INVALID_SOCKET;
 		WSACleanup();
 		//析构函数的好处：对象是全局的时候，只在main结束后调用，也不会影响任何行动
 		//多人开发的时候：如果在main中释放，可能别的人在不知情下在后面写了要用到sock的代码，导致错误
 		//只用一次的操作，可以用定义全局的方式
 		//但是当在main函数中如果有人用CServerSocket声明了一个局部变量，初始化又会被调用一次——解决： 单例模式
 	}
+
+	static void threadEntry(void* arg);
+	void threadFunc();
+
 	BOOL InitSockEnv() {
 		WSADATA data;
 		if (WSAStartup(MAKEWORD(1, 1), &data) != 0) {
@@ -344,6 +358,7 @@ private:
 			delete tmp; //显示释放堆内存
 		}
 	}
+
 
 	static CClientSocket* m_instance; //设置成静态成员，供静态函数访问
 	//CServerSocket* m_instance;
