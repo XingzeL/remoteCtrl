@@ -86,7 +86,7 @@ protected:  //除了启动，都保护起来
 		sockaddr_in client_adr;
 		int cli_sz = sizeof(client_adr); //fault1: 是adr的size，写成了sock的size导致accept直接返回-1
 		TRACE("Start to accept \r\n");
-		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz); //会卡在这里
+		m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz); 
 		TRACE("End Accept\r\n");
 		if (m_client == -1) return false;
 		//char buffer[1024];

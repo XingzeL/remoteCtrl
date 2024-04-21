@@ -128,7 +128,7 @@ public:
 	std::string strData; //包数据
 	WORD sSum; //和校验
 	//std::string strOut; //整个包的数据
-	HANDLE hEvent; //用于发送数据的时候
+	HANDLE hEvent; //表示cmd发送请求-得到响应的事件
 };
 #pragma pack(pop)
 
@@ -246,23 +246,8 @@ public:
 		return -1; //意外情况
 	}
 
-	bool Send(const char* pData, int nSize) {
-		if (m_sock == -1) return false;
-		return send(m_sock, pData, nSize, 0) > 0;
-	}
-
-	/*
-	  原本Send传入的不是const pack，在进行网络的send的时候会用Data()改变pack中的内容
-	  在C层重构中的发送接口传入的是const(为了低耦合性), 这个改变pack自身的函数需要修改：
-	  从调用原版Data()改变pack的strOut成员改成一个局部变量作为参数传给新的Data(string&)
-	  这样改变的就是这个参数而不是pack，满足了C层的函数要求
-	 */
-	bool Send(const CPacket& pack) { //1.将参数改变成const
-		if (m_sock == -1) return false;
-		std::string strOut;
-		pack.Data(strOut); //2.const参数只能调用有const后缀的函数,不会改变pack，Data函数会改变strOut
-		return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
-	}
+	bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks,
+		bool isAutoClose = true);
 
 	bool GetFilePath(std::string& strPath) {
 		//获取文件列表
@@ -293,11 +278,15 @@ public:
 	}
 
 	void UpdateAddress(int nIP, int nPort) {
-		m_nIP = nIP;
-		m_nPort = nPort;
+		if (m_nIP != nIP || m_nPort != nPort) {
+			m_nIP = nIP;
+			m_nPort = nPort;
+		}
 	}
 
 private:
+	bool m_bAutoClose;
+	std::map<HANDLE, bool> m_mapAutoClosed;
 	std::list<CPacket> m_lstSend; //要发送的数据
 	std::map<HANDLE, std::list<CPacket>> m_mapAck; //认为对方会应答一系列的包；
 	//如果用vector，数量不稳定时候开销很大：随着空间的增大，push_back消耗的时间指数增加
@@ -312,6 +301,7 @@ private:
 	//拷贝构造
 	CClientSocket(const CClientSocket& ss)
 	{
+		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
@@ -319,7 +309,7 @@ private:
 
 	CClientSocket& operator=(const CClientSocket& ss) {}
 	CClientSocket() :
-		m_nIP(INADDR_ANY), m_nPort(0)
+		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true)
 	{
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);
@@ -327,7 +317,8 @@ private:
 		}
 		//m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
 		m_buffer.resize(BUFFERSIZE);
-		memset(m_buffer.data(), 0, BUFFERSIZE); //
+		memset(m_buffer.data(), 0, BUFFERSIZE); 
+		
 	}
 	~CClientSocket() {
 		closesocket(m_sock);
@@ -357,6 +348,24 @@ private:
 			TRACE("Socket has been released!\r\n");
 			delete tmp; //显示释放堆内存
 		}
+	}
+
+	bool Send(const char* pData, int nSize) {
+		if (m_sock == -1) return false;
+		return send(m_sock, pData, nSize, 0) > 0;
+	}
+
+	/*
+	  原本Send传入的不是const pack，在进行网络的send的时候会用Data()改变pack中的内容
+	  在C层重构中的发送接口传入的是const(为了低耦合性), 这个改变pack自身的函数需要修改：
+	  从调用原版Data()改变pack的strOut成员改成一个局部变量作为参数传给新的Data(string&)
+	  这样改变的就是这个参数而不是pack，满足了C层的函数要求
+	 */
+	bool Send(const CPacket& pack) { //1.将参数改变成const
+		if (m_sock == -1) return false;
+		std::string strOut;
+		pack.Data(strOut); //2.const参数只能调用有const后缀的函数,不会改变pack，Data函数会改变strOut
+		return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 	}
 
 

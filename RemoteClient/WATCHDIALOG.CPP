@@ -26,7 +26,7 @@ BOOL CWatchDialog::OnInitDialog()
 
 	// TODO:  在此添加额外的初始化
 	m_isFull = false;
-	SetTimer(0, 20, NULL); 
+	SetTimer(0, 20, NULL); //设置定时器
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常: OCX 属性页应返回 FALSE
 }
@@ -36,25 +36,27 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent) //定时取得图像的功能函数
 {
 	if (nIDEvent == 0) {
 		CClientController* pController = CClientController::getInstance();
-		if (isFull()) { //本次设计将isFull的状态成员从主窗口转移到了watchDlg对象中
+		if (m_isFull) { //本次设计将isFull的状态成员从主窗口转移到了watchDlg对象中
 			//应该得到WATCH的DC，也就是显示内容的部分
+			
 			CRect rect;
 			m_picture.GetWindowRect(rect);
-			CImage image;
-			pController->GetImage(image);
+		
+			//pController->GetImage(m_image);
 			if (m_nObjWidth == -1) {
-				m_nObjWidth = image.GetWidth();
+				m_nObjWidth = m_image.GetWidth();
 			}
 
 			if (m_nObjHeight == -1) {
-				m_nObjHeight = image.GetHeight();
+				m_nObjHeight = m_image.GetHeight();
 			}
 			//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-			image.StretchBlt(
+			m_image.StretchBlt(
 				m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
 			m_picture.InvalidateRect(NULL);
-			image.Destroy(); //对CImage的操作
+			m_image.Destroy(); //对CImage的操作
 			m_isFull = false;//已读取缓冲中的内容，可以读了
+			TRACE("更新图片完成\r\n");
 			//SetImageStatus(false); 
 		}
 	}

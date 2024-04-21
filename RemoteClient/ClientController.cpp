@@ -52,23 +52,36 @@ LRESULT CClientController::SendMessage(MSG msg)
     PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)&hEvent); //给线程号发送消息，然后想办法拿到返回结果
     //MSGINFO& inf = m_mapMessage.find(uuid)->second;
     WaitForSingleObject(hEvent, -1); //同步：等待事件结束
+    CloseHandle(hEvent);
     return info.result; //拿到消息处理的返回值
 }
 
-int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+int CClientController::SendCommandPacket(int nCmd, bool bAutoClose,
+    BYTE* pData, size_t nLength, std::list<CPacket>* plstPacks) //传入lstPack指针，可以分辨关心应答还是不关心
 {
     CClientSocket* pClient = CClientSocket::getInstance();
-    if (pClient->InitSocket() == false) return false;
+    //if (pClient->InitSocket() == false) return false;
     HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     //TODO: 不应该直接发送，而是投入队列
-    pClient->Send(CPacket(nCmd, pData, nLength, hEvent));
-    int cmd = DealCommand(); //去接收
-
-    if (bAutoClose) {
-        CloseSocket();
+    std::list<CPacket> lstPacks; //应答结果包需要给到外面
+    if (plstPacks == NULL) {
+        //说明不关心应答赋值成一个局部变量，因为之后要调用SendPacket,保证参数
+        plstPacks = &lstPacks; 
     }
 
-    return cmd;
+    pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);
+    CloseHandle(hEvent); //回收事件句柄，防止资源耗尽
+    if (plstPacks->size() > 0) {
+        TRACE("Get Recive %d \r\n", plstPacks->front().sCmd);
+        return plstPacks->front().sCmd; //返回值和以前的DealCommand一样，返回的包也通过plstPacks传上去了
+    }
+    //int cmd = DealCommand(); 
+
+    //if (bAutoClose) {
+    //    CloseSocket();
+    //}
+
+    return -1; //说明没有应答
 }
 
 int CClientController::DownFile(CString strPath)
@@ -116,12 +129,16 @@ void CClientController::threadWatchScreen()
     Sleep(50);
     while (!m_isClosed) {
         if (m_watchDlg.isFull() == false) {
-            int ret = SendCommandPacket(6);  //与M层交互，发送命令
-            if (ret == 6) {
-     
-                if (GetImage(m_remoteDlg.GetImage()) == 0) {
-
-                    m_watchDlg.SetImageStatus(true);
+            std::list<CPacket> lstPacks;
+            int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);  //与M层交互，发送命令
+            if (ret == 6) { //拿到cmd号和传回的数据
+                
+                //error: 传出命令6，但是m_image是空
+                if (Cutils::Bytes2Image(m_watchDlg.m_image,
+                    lstPacks.front().strData) == 0) //Bytes2Image(图片缓冲区，图片数据);将包的数据加载到图像缓冲区 
+                {
+                    m_watchDlg.SetImageStatus(true); //使得能够持续更新
+                    TRACE("成功设置图片\r\n");
                 }
                 else {
                     TRACE("获取图片失败! ret = %d\r\n", ret);
@@ -252,16 +269,18 @@ void CClientController::threadFunc() //控制层的线程，消息处理
 
 LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-    CClientSocket* pClient = CClientSocket::getInstance();
-    CPacket* pPacket = (CPacket*)wParam;
-    return pClient->Send(*pPacket); //发送包;
+    //CClientSocket* pClient = CClientSocket::getInstance();
+    //CPacket* pPacket = (CPacket*)wParam;
+    //return pClient->Send(*pPacket); //发送包;
+    return LRESULT();
 }
 
 LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-    CClientSocket* pClient = CClientSocket::getInstance();
-    char* pBuffer = (char*)wParam;
-    return pClient->Send(pBuffer, (int)lParam); //发送包;
+    //CClientSocket* pClient = CClientSocket::getInstance();
+    //char* pBuffer = (char*)wParam;
+    //return pClient->Send(pBuffer, (int)lParam); //发送包;
+    return LRESULT();
 }
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)

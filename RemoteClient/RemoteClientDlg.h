@@ -35,12 +35,10 @@ public:
 	//void threadWatchData(); //成员函数可以访问this指针
 public:
 
-	CImage& GetImage() {
-		return m_image;
-	}
+
 
 private:
-	CImage m_image; //图像缓存
+	//CImage m_image; //图像缓存
 	bool m_isFull; //图像缓存是否有数据
 	bool m_isClosed; //监视是否关闭
 

@@ -206,7 +206,8 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 
 void CRemoteClientDlg::OnBnClickedButton1()
 {
-	CClientController::getInstance()->SendCommandPacket(1981);
+	int ret = CClientController::getInstance()->SendCommandPacket(1981);
+	TRACE("Get revice %d\r\n", ret);
 }
 
 

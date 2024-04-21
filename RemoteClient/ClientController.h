@@ -37,11 +37,6 @@ public:
 		CClientSocket::getInstance()->CloseSocket();
 	}
 
-	int SendPacket(const CPacket& pack) {
-		CClientSocket* pClient = CClientSocket::getInstance();
-		if (pClient->InitSocket() == false) return false;
-		pClient->Send(pack);
-	}
 
 	//1 查看磁盘分区
 	//2 查看指定目录下的文件
@@ -55,11 +50,14 @@ public:
 	// 1981 测试连接
 	// 返回值是命令号
 	int SendCommandPacket(int nCmd, bool bAutoClose = true,
-		BYTE* pData = NULL, size_t nLength = 0);
+		BYTE* pData = NULL, size_t nLength = 0,
+		std::list<CPacket>* plstPacks = NULL);
 
-	int GetImage(CImage& image) { //mem to image的功能，可以封装走
-		CClientSocket* pClient = CClientSocket::getInstance();
-		return Cutils::Bytes2Image(image, pClient->GetPack().strData);
+	int GetImage(CImage& image) { //mem to image的功能，可以封装走 -> 多线程时代弃用
+
+		CClientSocket* pClient = CClientSocket::getInstance(); //不应该从client中拿
+		return Cutils::Bytes2Image(image, pClient->GetPack().strData); 
+		//经过调试，这里拿到pack是空！因为响应的数据放在lstPack中传给了watchDlg的m_image缓冲区中，没有保存在网络层中
 	}
 
 	int DownFile(CString strPath);

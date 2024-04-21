@@ -17,6 +17,9 @@ public:
 	void SetImageStatus(bool isFull = false) {
 		m_isFull = isFull;
 	}
+	CImage& GetImage() {
+		return m_image;
+	}
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_DLG_WATCH };
@@ -25,6 +28,7 @@ public:
 	int m_nObjWidth;
 	int m_nObjHeight;
 	bool m_isFull;
+	CImage m_image;
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
