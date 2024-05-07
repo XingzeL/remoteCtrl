@@ -221,13 +221,15 @@ void CRemoteClientDlg::OnLvnItemchangedList1(NMHDR* pNMHDR, LRESULT* pResult)
 
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
-	int ret = CClientController::getInstance()->SendCommandPacket(1);
-	if (ret == -1) {
+	std::list<CPacket> lstPackets;
+	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets);
+	if (ret == -1 || (lstPackets.size() <= 0)) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
 	}
-	CClientSocket* pClient = CClientSocket::getInstance();
-	std::string drivers = pClient->GetPack().strData; // 获取逗号分隔的文件信息
+	CPacket& head = lstPackets.front();
+
+	std::string drivers = head.strData;
 	CString dr;
 
 	// 删除树控件中的所有项
@@ -292,47 +294,35 @@ void CRemoteClientDlg::LoadFileInfo()
 	//没有调成多字节字符集之前类型转换就没有用
 	BYTE* pData = (BYTE*)(LPCTSTR)strPath;
 	//传给服务器：得到文件信息
-	CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //如果不是多字符集:这里只传进去了D而不是"D:\\"
-	int cmd = 0;
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-	CClientSocket* pClient = CClientSocket::getInstance();
-	int count = 0; //用于计数
-	while (pInfo->HasNext) {
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		//从do-while改为while: 因为server的发送逻辑：如果是空路径或者没有权限就会直接发回一个空，没有内容，所以需要先判断HasNext
-		//覅 fiao 四声
-		if (pInfo->IsDirectory) {
-			if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
-				int cmd = pClient->DealCommand(); //拿到
-				TRACE("ack:%d\r\n", cmd);
-				if (cmd < 0) break;
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-				continue;
+	std::list<CPacket> lstPackets;
+	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, 
+		(BYTE*)(LPCTSTR)strPath, strPath.GetLength(), &lstPackets); //如果不是多字符集:这里只传进去了D而不是"D:\\"
+	if (lstPackets.size() > 0) {
+		//往后处理
+		std::list<CPacket>::iterator it = lstPackets.begin();
+		for (; it != lstPackets.end(); it++) {
+			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();
+			if (pInfo->HasNext == FALSE) continue;
+			if (pInfo->IsDirectory) {
+				if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
+					continue;
+				}
+				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
+				m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
 			}
-			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
-			m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+			else {
+				//是文件的情况
+				/*m_List.InsertItem(0, pInfo->szFileName);*/
+				m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
+				m_List.UpdateWindow();
+				TRACE("文件名：%s", pInfo->szFileName);
+				//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
+			}
 		}
-		else {
-			//是文件的情况
-			/*m_List.InsertItem(0, pInfo->szFileName);*/
-			m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
-			m_List.UpdateWindow();
-			TRACE("文件名：%s",pInfo->szFileName);
-			//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
-		}
+	}
 
-		int cmd = pClient->DealCommand();
-		TRACE("ack:%d\r\n", cmd);
-		if (cmd < 0) {
-			TRACE("退出建树");
-			break;
-		}
-		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
-		++count;
-	}  //当hasnext为空，说明没有
-	TRACE("收到了%d个项目", count);
 	//注意：有一个点上不断双击时，需要保证不累积
-	pClient->CloseSocket();
+
 }
 void CRemoteClientDlg::LoadFileCurrent()
 {

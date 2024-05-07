@@ -288,7 +288,7 @@ private:
 	bool m_bAutoClose;
 	std::map<HANDLE, bool> m_mapAutoClosed;
 	std::list<CPacket> m_lstSend; //要发送的数据
-	std::map<HANDLE, std::list<CPacket>> m_mapAck; //认为对方会应答一系列的包；
+	std::map<HANDLE, std::list<CPacket>&> m_mapAck; //认为对方会应答一系列的包；改成list的引用，就不用手动把包插进去
 	//如果用vector，数量不稳定时候开销很大：随着空间的增大，push_back消耗的时间指数增加
 	
 	//M层：加入IP和Port的信息

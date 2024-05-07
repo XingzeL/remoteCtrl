@@ -28,27 +28,29 @@ bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks
 {
 	if (m_sock == INVALID_SOCKET) {
 		//if (InitSocket() == false) return false;
-		_beginthread(&CClientSocket::threadEntry, 0, this); //无效的时候启动线程
+		_beginthread(&CClientSocket::threadEntry, 0, this); //无效的时候启动线程,这个线程用于发送和接收响应包
 	}
 	auto pr = m_mapAck.insert(std::pair<HANDLE,
-		std::list<CPacket>>(pack.hEvent, lstPacks));
+		std::list<CPacket>&>(pack.hEvent, lstPacks)); //一个事务开启，加入对应的时间handle和响应包列表
 
 	m_mapAutoClosed.insert(std::pair<HANDLE, bool>(pack.hEvent, isAutoClose));
+	TRACE("cmd:%d event %08X\r\n", pack.sCmd, pack.hEvent, GetCurrentThreadId());
 	//给任务handle写入是否自动关闭的信息
 
 	m_lstSend.push_back(pack); //加入到发送列表中
 	//有线程进行发送和接收，发送后阻塞等待回应的包，解包成功后就会响应对应的Event
 	WaitForSingleObject(pack.hEvent, INFINITE); //等待响应
-	std::map<HANDLE, std::list<CPacket>>::iterator it;
+	std::map<HANDLE, std::list<CPacket>&>::iterator it;
 	it = m_mapAck.find(pack.hEvent);
 
 	if (it != m_mapAck.end()) {
 		std::list<CPacket>::iterator i;
 		//10.6.8的最后冯老师把这个for删掉了，但是导致没有画面显示
-		for (i = it->second.begin(); i != it->second.end(); i++) { 
+		//for (i = it->second.begin(); i != it->second.end(); i++) { 
 			//这个for循环没有的话画面就不会显示，SendCommandPacket就会返回-1因为lstPack的大小是0
-			lstPacks.push_back(*i);
-		}
+			// 在m_mapAck中的list改成&前进行的手动插入
+		//	lstPacks.push_back(*i);
+		//}
 		m_mapAck.erase(it);
 		return true;
 	}
@@ -79,42 +81,50 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 
 				continue;
 			}
-			std::map<HANDLE, std::list<CPacket>>::iterator it;
+			std::map<HANDLE, std::list<CPacket>&>::iterator it;
 			it = m_mapAck.find(head.hEvent);
-			std::map<HANDLE, bool>::iterator it0 = m_mapAutoClosed.find(head.hEvent);
-			auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>>(head.hEvent, std::list<CPacket>()));
-			
-			do {
-				int length = recv(m_sock, pBuffer, BUFFERSIZE - index, 0);
-				if (length > 0 || index > 0) { //读取成功
-					//解包
-					index += length;
-					size_t size = (size_t)index;
-					CPacket pack((BYTE*)pBuffer, size); //解包，size是引用
-					//监控的时候发送一个命令，回来一个pack，但是有多个TCP包；
-					//传文件的时候发送一个命令，回来多个pack，如果接收到一次就pop_front，后续的包就拿不到对应的handle，需要解决
-					if (size > 0) {
-						//TODO：通知对应的事件
-						pack.hEvent = head.hEvent; //pack是接收到的包，将hEvent和发送的包的event匹配，然后激活event
-						it->second.push_back(pack); //pr是个pair，第二个元素是bool
-						SetEvent(head.hEvent);
-						memmove(pBuffer, pBuffer + size, index - size);
-						index -= size;
-						if (it0->second) {
-							SetEvent(head.hEvent);
+			if (it != m_mapAck.end()) {
+				std::map<HANDLE, bool>::iterator it0 = m_mapAutoClosed.find(head.hEvent);
+				auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>&>(head.hEvent, std::list<CPacket>()));
+
+				do {
+					//int length = recv(m_sock, pBuffer, BUFFERSIZE - index, 0); //这里导致bug
+					int length = recv(m_sock, pBuffer + index, BUFFERSIZE - index, 0);
+					if (length > 0 || index > 0) { //读取成功
+						//解包
+						index += length;
+						size_t size = (size_t)index;
+						CPacket pack((BYTE*)pBuffer, size); //解包，size是引用
+						//监控的时候发送一个命令，回来一个pack，但是有多个TCP包；
+						//传文件的时候发送一个命令，回来多个pack，如果接收到一次就pop_front，后续的包就拿不到对应的handle，需要解决
+						if (size > 0) {
+							//TODO：通知对应的事件
+							pack.hEvent = head.hEvent; //pack是接收到的包，将hEvent和发送的包的event匹配，然后激活event
+							it->second.push_back(pack); //pr是个pair，第二个元素是bool，这里将响应包放到了队列引用中
+							/*SetEvent(head.hEvent); */
+							memmove(pBuffer, pBuffer + size, index - size);
+							index -= size;
+							if (it0->second) {
+								SetEvent(head.hEvent);
+								break;
+							}
 						}
 					}
-				}
 
-				else if (length == 0 && index <= 0) {
-					CloseSocket();
-					SetEvent(head.hEvent);
-				}
-				
-			} while (it0->second == false); //如果不是自动关闭的话就会一直接收
+					else if (length <= 0 && index <= 0) {
+						CloseSocket();
+						SetEvent(head.hEvent);
+						m_mapAutoClosed.erase(it0);  //需要将AutoClosed的状态清楚
+						break; //在AutoClose为false的时候需要进行break，不然会一直卡在里面循环
+					}
+
+				} while (it0->second == false); //如果不是自动关闭的话就会一直接收
+			}
+			
 			m_lstSend.pop_front();
-			InitSocket();
-			//CloseSocket(); //连接测试的时候加上
+			if (InitSocket() == false) {
+				InitSocket();
+			}
 		}
 	}
 	CloseSocket();
