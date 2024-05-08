@@ -147,6 +147,7 @@ void CClientController::threadWatchScreen()
         }
         Sleep(1);
     }
+    TRACE("thread end %d\r\n", m_isClosed);
 
 }
 

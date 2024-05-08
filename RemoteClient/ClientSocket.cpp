@@ -24,20 +24,60 @@ std::string GetErrorInfo(int wsaErrCode) {
 	return ret;
 }
 
+bool CClientSocket::InitSocket()
+{
+	//修改的bug：因为每次送消息都会关闭连接，client不能像server一样socket只初始化一次
+	// 每次Inite都要初始化m_sock
+
+	//10.6.10：网多问题: 在发送接收的线程中会调用InitSocket,CloseSocket到创建socket之间
+	if (m_sock != INVALID_SOCKET) CloseSocket(); //这里关系到CloseSocket到创建socket之间
+	m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
+	//TODO: 进行socket的校验
+	if (m_sock == -1) return false;
+	sockaddr_in serv_adr;
+	memset(&serv_adr, 0, sizeof(serv_adr));
+	serv_adr.sin_family = AF_INET;
+	//serv_adr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	//TRACE("addr: %08X nIP %08X\r\n", serv_adr.sin_addr.s_addr, nIp);
+	serv_adr.sin_addr.s_addr = htonl(m_nIP);
+	serv_adr.sin_port = htons(m_nPort);
+	//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
+	// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
+
+	if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
+		//LPCTSTR msg = "IP address not exist!";
+		AfxMessageBox(_T("不存在IP地址！"));
+		return false;
+	}
+	int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
+	if (ret == -1) {
+		AfxMessageBox(_T("连接失败"));
+		TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrorInfo(WSAGetLastError()).c_str());
+	}
+	//else {
+	//	AfxMessageBox(_T("连接成功"));
+
+	//}
+	return true;
+}
+
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClose)
 {
-	if (m_sock == INVALID_SOCKET) {
+	if (m_sock == INVALID_SOCKET && m_hThread == INVALID_HANDLE_VALUE) {
 		//if (InitSocket() == false) return false;
-		_beginthread(&CClientSocket::threadEntry, 0, this); //无效的时候启动线程,这个线程用于发送和接收响应包
+		m_hThread = (HANDLE)_beginthread(&CClientSocket::threadEntry, 0, this); //无效的时候启动线程,这个线程用于发送和接收响应包
+		TRACE("start thread\r\n"); //检验是否线程的创建只有一次
 	}
+
+	m_lock.lock();
 	auto pr = m_mapAck.insert(std::pair<HANDLE,
 		std::list<CPacket>&>(pack.hEvent, lstPacks)); //一个事务开启，加入对应的时间handle和响应包列表
-
 	m_mapAutoClosed.insert(std::pair<HANDLE, bool>(pack.hEvent, isAutoClose));
 	TRACE("cmd:%d event %08X\r\n", pack.sCmd, pack.hEvent, GetCurrentThreadId());
 	//给任务handle写入是否自动关闭的信息
 
 	m_lstSend.push_back(pack); //加入到发送列表中
+	m_lock.unlock();
 	//有线程进行发送和接收，发送后阻塞等待回应的包，解包成功后就会响应对应的Event
 	WaitForSingleObject(pack.hEvent, INFINITE); //等待响应
 	std::map<HANDLE, std::list<CPacket>&>::iterator it;
@@ -75,7 +115,9 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 			
 			TRACE("lstSend size:%d\r\n", m_lstSend.size());
 			//说明有数据要发送
+			m_lock.lock();
 			CPacket& head = m_lstSend.front();
+			m_lock.unlock();
 			if (Send(head) == false) {
 				TRACE("发送失败\r\n");
 
@@ -90,7 +132,7 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 				do {
 					//int length = recv(m_sock, pBuffer, BUFFERSIZE - index, 0); //这里导致bug
 					int length = recv(m_sock, pBuffer + index, BUFFERSIZE - index, 0);
-					if (length > 0 || index > 0) { //读取成功
+					if (length > 0 || (index > 0)) { //读取成功
 						//解包
 						index += length;
 						size_t size = (size_t)index;
@@ -119,13 +161,17 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 					}
 
 				} while (it0->second == false); //如果不是自动关闭的话就会一直接收
+				//index > 0 : 防止在不关闭的连接时出现recv=0时陷入死循环
 			}
-			
+			m_lock.lock();
 			m_lstSend.pop_front();
+			m_lock.unlock();
 			if (InitSocket() == false) {
 				InitSocket();
 			}
 		}
+		//队列长度小于等于0的时候需要休眠一下
+		Sleep(1);
 	}
 	CloseSocket();
 }

@@ -6,6 +6,7 @@
 #include <vector>
 #include <list>
 #include <map>
+#include <mutex>
 
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
@@ -174,40 +175,7 @@ public:
 		return m_instance;
 	}
 
-	bool InitSocket() {
-		//修改的bug：因为每次送消息都会关闭连接，client不能像server一样socket只初始化一次
-		// 每次Inite都要初始化m_sock
-		
-		if (m_sock != INVALID_SOCKET) CloseSocket();
-		m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
-		//TODO: 进行socket的校验
-		if (m_sock == -1) return false;
-		sockaddr_in serv_adr;
-		memset(&serv_adr, 0, sizeof(serv_adr));
-		serv_adr.sin_family = AF_INET;
-		//serv_adr.sin_addr.s_addr = inet_addr("127.0.0.1");
-		//TRACE("addr: %08X nIP %08X\r\n", serv_adr.sin_addr.s_addr, nIp);
-		serv_adr.sin_addr.s_addr = htonl(m_nIP);
-		serv_adr.sin_port = htons(m_nPort);
-		//为什么server有多个IP: 有的时候是对内工作，比如是数据库，由内网的设备进行连接；
-		// 对外的IP地址将对外的服务暴露给外面，内网的带宽可以弄得很宽(用光纤) 外网带宽成本高
-		
-		if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
-			//LPCTSTR msg = "IP address not exist!";
-			AfxMessageBox(_T("不存在IP地址！"));
-			return false;
-		}
-		int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof(serv_adr));
-		if (ret == -1) {
-			AfxMessageBox(_T("连接失败"));
-			TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrorInfo(WSAGetLastError()).c_str());
-		}
-		//else {
-		//	AfxMessageBox(_T("连接成功"));
-
-		//}
-		return true;
-	}
+	bool InitSocket();
 
 #define BUFFERSIZE 4096000
 	int DealCommand() { //接收服务器的响应，解析一个packet，返回值为响应的命令值
@@ -285,7 +253,9 @@ public:
 	}
 
 private:
+	HANDLE m_hThread;
 	bool m_bAutoClose;
+	std::mutex m_lock;
 	std::map<HANDLE, bool> m_mapAutoClosed;
 	std::list<CPacket> m_lstSend; //要发送的数据
 	std::map<HANDLE, std::list<CPacket>&> m_mapAck; //认为对方会应答一系列的包；改成list的引用，就不用手动把包插进去
@@ -309,7 +279,8 @@ private:
 
 	CClientSocket& operator=(const CClientSocket& ss) {}
 	CClientSocket() :
-		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true)
+		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true),
+		m_hThread(INVALID_HANDLE_VALUE)
 	{
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);
