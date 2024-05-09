@@ -48,10 +48,11 @@ public:
 	// 7 锁机
 	// 8 解锁
 	// 1981 测试连接
-	// 返回值是命令号
-	int SendCommandPacket(int nCmd, bool bAutoClose = true,
-		BYTE* pData = NULL, size_t nLength = 0,
-		std::list<CPacket>* plstPacks = NULL);
+	// 返回true 成功， false 失败
+	bool SendCommandPacket(
+		HWND hWnd, //数据包收到后，需要应答的窗口
+		int nCmd, bool bAutoClose = true,
+		BYTE* pData = NULL, size_t nLength = 0);
 
 	int GetImage(CImage& image) { //mem to image的功能，可以封装走 -> 多线程时代弃用
 

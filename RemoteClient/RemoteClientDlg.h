@@ -73,7 +73,6 @@ public:
 	afx_msg void OnTvnSelchangedTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
 
 	//自定义消息
-	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);  //自重构业务到C层后这个接口已经废除
 	afx_msg void OnBnClickedBtnStartWatch();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnIpnFieldchangedIpaddressctrl(NMHDR* pNMHDR, LRESULT* pResult);

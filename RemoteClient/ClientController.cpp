@@ -56,32 +56,13 @@ LRESULT CClientController::SendMessage(MSG msg)
     return info.result; //拿到消息处理的返回值
 }
 
-int CClientController::SendCommandPacket(int nCmd, bool bAutoClose,
-    BYTE* pData, size_t nLength, std::list<CPacket>* plstPacks) //传入lstPack指针，可以分辨关心应答还是不关心
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength) //传入lstPack指针，可以分辨关心应答还是不关心
 {
+    TRACE("cmd:%d %s start %lld \r\n", nCmd, __FUNCTION__, GetTickCount64());
     CClientSocket* pClient = CClientSocket::getInstance();
-    //if (pClient->InitSocket() == false) return false;
-    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    //TODO: 不应该直接发送，而是投入队列
-    std::list<CPacket> lstPacks; //应答结果包需要给到外面
-    if (plstPacks == NULL) {
-        //说明不关心应答赋值成一个局部变量，因为之后要调用SendPacket,保证参数
-        plstPacks = &lstPacks; 
-    }
 
-    pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
-    CloseHandle(hEvent); //回收事件句柄，防止资源耗尽
-    if (plstPacks->size() > 0) {
-        TRACE("Get Recive %d \r\n", plstPacks->front().sCmd);
-        return plstPacks->front().sCmd; //返回值和以前的DealCommand一样，返回的包也通过plstPacks传上去了
-    }
-    //int cmd = DealCommand(); 
-
-    //if (bAutoClose) {
-    //    CloseSocket();
-    //}
-
-    return -1; //说明没有应答
+    return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
+   
 }
 
 int CClientController::DownFile(CString strPath)
@@ -130,7 +111,9 @@ void CClientController::threadWatchScreen()
     while (!m_isClosed) {
         if (m_watchDlg.isFull() == false) {
             std::list<CPacket> lstPacks;
-            int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);  //与M层交互，发送命令
+            int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), true, NULL, 0);  //与M层交互，发送命令
+            //TODO: 添加消息响应函数WM_SEND_PACK_ACK
+            //TODO: 控制发送频率
             if (ret == 6) { //拿到cmd号和传回的数据
                 
                 //error: 传出命令6，但是m_image是空
@@ -174,7 +157,7 @@ void CClientController::threadDownloadFile()
         //int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)strFile, strFile.GetLength()); //1.原先在V层直接调用发送包的函数，出现updata界面冲突
 
         //int ret = SendMessage(WM_SEND_PACKET, 4 << 1 | 0, (LPARAM)(LPCSTR)strFile); //2.改为在V层发送消息，主线程接收后进行包的发送
-        int ret = SendCommandPacket(4, false,
+        int ret = SendCommandPacket(m_remoteDlg,4, false,
             (BYTE*)(LPCSTR)m_strRemote,
             m_strRemote.GetLength());  //
 

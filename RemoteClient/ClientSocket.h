@@ -12,13 +12,14 @@
 #pragma pack(push)
 #pragma pack(1)
 #define WM_SEND_PACK (WM_USER + 1)  //发送包数据
+#define WM_SEND_PACK_ACK (WM_USER+2) ///发送包数据应答
 //void Dump(BYTE* pData, size_t nSize);
 class CPacket {
 public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
 
 	//打包的重构
-	CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
 		sHead = 0xFEFF;
 		nLength = nSize + 4;
 		sCmd = nCmd;
@@ -33,7 +34,6 @@ public:
 		for (size_t j = 0; j < strData.size(); j++) {
 			sSum += BYTE(strData[j]) & 0xFF;
 		}
-		this->hEvent = hEvent; //传递一个event
 	}
 
 	CPacket(const CPacket& pack) {
@@ -42,10 +42,9 @@ public:
 		sCmd = pack.sCmd;
 		strData = pack.strData;
 		sSum = pack.sSum;
-		hEvent = pack.hEvent;
 	}
 
-	CPacket(const BYTE* pData, size_t& nSize):hEvent(INVALID_HANDLE_VALUE){
+	CPacket(const BYTE* pData, size_t& nSize){
 		//用于解析数据的构造函数
 		size_t i;
 		for (i = 0; i < nSize; i++) {
@@ -95,7 +94,6 @@ public:
 			sCmd = pack.sCmd;
 			strData = pack.strData;
 			sSum = pack.sSum;
-			hEvent = pack.hEvent;
 		}
 		return *this;
 	}
@@ -129,7 +127,6 @@ public:
 	std::string strData; //包数据
 	WORD sSum; //和校验
 	//std::string strOut; //整个包的数据
-	HANDLE hEvent; //表示cmd发送请求-得到响应的事件
 };
 #pragma pack(pop)
 
@@ -146,6 +143,31 @@ typedef struct file_info {
 	BOOL IsDirectory; //是否是目录
 	BOOL HasNext;
 }FILEINFO, * PFILEINFO;
+
+enum {
+	CSM_AUTOCLOSE=1, //CSM = Client Socket Mode 自动关闭模式
+};
+
+typedef struct PacketData{ //消息中传输的Packet，有2个元素，data和mode
+	std::string strData;
+	UINT nMode;
+	PacketData(const char* pData, size_t nLen, UINT mode) {
+		strData.resize(nLen);
+		memcpy((char*)strData.c_str(), pData, nLen);
+		nMode = mode;
+	}
+	PacketData(const PacketData& data) {
+		strData = data.strData;
+		nMode = data.nMode;
+	}
+	PacketData& operator=(const PacketData& data) {
+		if (this != &data) {
+			strData = data.strData;
+			nMode = data.nMode;
+		}
+		return *this;
+	}
+}PACKET_DATA;
 
 typedef struct MouseEvent {
 	MouseEvent() {
@@ -214,8 +236,9 @@ public:
 		return -1; //意外情况
 	}
 
-	bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks,
-		bool isAutoClose = true);
+	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks,
+	//	bool isAutoClose = true);
+	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose = true);
 
 	bool GetFilePath(std::string& strPath) {
 		//获取文件列表
@@ -253,6 +276,7 @@ public:
 	}
 
 private:
+	UINT m_nThreadID;
 	typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	std::map<UINT, MSGFUNC> m_mapFunc;
 	HANDLE m_hThread;
@@ -271,41 +295,11 @@ private:
 	CPacket m_packet;
 	//单例模式：将构造和析构函数作为private
 	//拷贝构造
-	CClientSocket(const CClientSocket& ss)
-	{
-		m_hThread = INVALID_HANDLE_VALUE;
-		m_bAutoClose = ss.m_bAutoClose;
-		m_sock = ss.m_sock;
-		m_nIP = ss.m_nIP;
-		m_nPort = ss.m_nPort;
-		struct {
-			UINT message;
-			MSGFUNC func;
-		}funcs[] = {
-			{WM_SEND_PACK, &CClientSocket::SendPack},
-			{0, NULL},
-		};
-		for (int i = 0; funcs[i].message != 0; ++i) {
-			if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false);
-			TRACE("插入失败，消息指： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i); 
-		}
-		
-	}
+	CClientSocket(const CClientSocket& ss);
+
 
 	CClientSocket& operator=(const CClientSocket& ss) {}
-	CClientSocket() :
-		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true),
-		m_hThread(INVALID_HANDLE_VALUE)
-	{
-		if (InitSockEnv() == FALSE) {
-			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);
-			exit(0); //结束进程
-		}
-		//m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
-		m_buffer.resize(BUFFERSIZE);
-		memset(m_buffer.data(), 0, BUFFERSIZE); 
-		
-	}
+	CClientSocket();
 	~CClientSocket() {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;
@@ -316,7 +310,7 @@ private:
 		//但是当在main函数中如果有人用CServerSocket声明了一个局部变量，初始化又会被调用一次——解决： 单例模式
 	}
 
-	static void threadEntry(void* arg);
+	static unsigned __stdcall threadEntry(void* arg); //传给带线程号的beginthreadex的话就需要函数为unsigned __stdcall
 	void threadFunc();
 	void threadFunc2(); //线程接收消息，线程中调用注册好的回调函数
 

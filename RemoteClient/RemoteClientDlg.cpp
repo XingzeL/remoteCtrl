@@ -99,7 +99,6 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DELETEFILE, &CRemoteClientDlg::OnDeletefile)
 	ON_COMMAND(ID_RUNFILE, &CRemoteClientDlg::OnRunfile)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE_DIR, &CRemoteClientDlg::OnTvnSelchangedTreeDir)
-	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)
 	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
 	ON_WM_TIMER()
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESSCTRL, &CRemoteClientDlg::OnIpnFieldchangedIpaddressctrl)
@@ -206,7 +205,7 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 
 void CRemoteClientDlg::OnBnClickedButton1()
 {
-	int ret = CClientController::getInstance()->SendCommandPacket(1981);
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 1981);
 	TRACE("Get revice %d\r\n", ret);
 }
 
@@ -222,7 +221,7 @@ void CRemoteClientDlg::OnLvnItemchangedList1(NMHDR* pNMHDR, LRESULT* pResult)
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket> lstPackets;
-	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets);
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 1, true, NULL, 0);
 	if (ret == -1 || (lstPackets.size() <= 0)) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
@@ -295,8 +294,8 @@ void CRemoteClientDlg::LoadFileInfo()
 	BYTE* pData = (BYTE*)(LPCTSTR)strPath;
 	//传给服务器：得到文件信息
 	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, 
-		(BYTE*)(LPCTSTR)strPath, strPath.GetLength(), &lstPackets); //如果不是多字符集:这里只传进去了D而不是"D:\\"
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 2, false,
+		(BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //如果不是多字符集:这里只传进去了D而不是"D:\\"
 	if (lstPackets.size() > 0) {
 		TRACE("lstPacket.size = %d\r\n", lstPackets.size());
 		//往后处理
@@ -338,7 +337,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 	//没有调成多字节字符集之前类型转换就没有用
 	BYTE* pData = (BYTE*)(LPCTSTR)strPath;
 	//传给服务器：得到文件信息
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, 
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 2, false, (BYTE*)(LPCTSTR)strPath,
 		strPath.GetLength()); //如果不是多字符集:这里只传进去了D而不是"D:\\"
 	//CClientController::getInstance()->
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPack().strData.c_str();
@@ -431,7 +430,7 @@ void CRemoteClientDlg::OnDeletefile()
 	int nSelected = m_List.GetSelectionMark();
 	CString strFile = m_List.GetItemText(nSelected, 0);
 	strFile = strPath + strFile;
-	int ret = CClientController::getInstance()->SendCommandPacket(9, true, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 9, true, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
 	if (ret < 0) {
 		AfxMessageBox("删除文件命令执行失败！！！");
 	}
@@ -449,7 +448,7 @@ void CRemoteClientDlg::OnRunfile()
 	CString strFile = m_List.GetItemText(nSelected, 0);
 	
 	strFile = strPath + strFile;
-	int ret = CClientController::getInstance()->SendCommandPacket(3, true, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 3, true, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
 	if (ret < 0) {
 		AfxMessageBox("打开文件命令执行失败！！！");
 	}
@@ -462,36 +461,6 @@ void CRemoteClientDlg::OnTvnSelchangedTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
 	// TODO: 在此添加控件通知处理程序代码
 	*pResult = 0;
-}
-
-LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
-{
-	int ret = 0;
-	int cmd = wParam >> 1;
-	switch (cmd) {
-	case 4:
-		{
-			CString strFile = (LPCSTR)lParam;
-			int ret = CClientController::getInstance()->SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
-
-		}
-		break;
-	case 5: //鼠标操作 
-		{
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)lParam, sizeof(MOUSEEV));
-		}
-		break;
-	case 6:
-	case 7:
-	case 8:
-		{ //6,7,8都是只发送一个命令没有data
-			ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, NULL, 0);
-		}
-		break;
-	default:
-		return -1;
-	}
-	return ret;
 }
 
 

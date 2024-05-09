@@ -90,7 +90,7 @@ void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 		event.nButton = 0; //左键
 		event.nAction = 2; //双击
 		//CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true,(BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 		//pParent->SendMessage(WM_SEND_PACKET, 5 << 1 | 1, (WPARAM) & event);
 
 	}
@@ -111,7 +111,7 @@ void CWatchDialog::OnLButtonDown(UINT nFlags, CPoint point)
 		event.nButton = 0; //左键
 		event.nAction = 2; //按下
 		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 	}
 
 	CDialog::OnLButtonDown(nFlags, point);
@@ -129,7 +129,7 @@ void CWatchDialog::OnLButtonUp(UINT nFlags, CPoint point)
 		event.nButton = 0; //左键
 		event.nAction = 3; //弹起
 		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 
 	}
 
@@ -147,7 +147,7 @@ void CWatchDialog::OnRButtonDblClk(UINT nFlags, CPoint point)
 		event.nButton = 1; //右键
 		event.nAction = 1; //双击
 		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 
 	}
 
@@ -167,7 +167,7 @@ void CWatchDialog::OnRButtonDown(UINT nFlags, CPoint point)
 		event.nButton = 1; //右键
 		event.nAction = 2; //按下 TODO：服务端要做对应的修改
 		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 	}
 
 	CDialog::OnRButtonDown(nFlags, point);
@@ -184,7 +184,7 @@ void CWatchDialog::OnRButtonUp(UINT nFlags, CPoint point)
 		event.nButton = 1; //右键
 		event.nAction = 3; //弹起
 		CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent(); //得到父窗口
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 	}
 
 	CDialog::OnRButtonUp(nFlags, point);
@@ -219,7 +219,7 @@ void CWatchDialog::OnStnClickedWatch()
 		event.ptXY = remote;
 		event.nButton = 0; //左键
 		event.nAction = 0; //单击
-		CClientController::getInstance()->SendCommandPacket(5, true, (BYTE*)&event, sizeof(event));
+		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 5, true, (BYTE*)&event, sizeof(event));
 	}
 
 }
@@ -233,11 +233,11 @@ void CWatchDialog::OnOK()
 
 void CWatchDialog::OnBnClickedLock()
 {
-	CClientController::getInstance()->SendCommandPacket(7);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 7);
 }
 
 
 void CWatchDialog::OnBnClickedUnlock()
 {
-	CClientController::getInstance()->SendCommandPacket(8);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 8);
 }
