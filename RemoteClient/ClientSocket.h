@@ -11,7 +11,7 @@
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #pragma pack(push)
 #pragma pack(1)
-
+#define WM_SEND_PACK (WM_USER + 1)  //发送包数据
 //void Dump(BYTE* pData, size_t nSize);
 class CPacket {
 public:
@@ -253,6 +253,8 @@ public:
 	}
 
 private:
+	typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
+	std::map<UINT, MSGFUNC> m_mapFunc;
 	HANDLE m_hThread;
 	bool m_bAutoClose;
 	std::mutex m_lock;
@@ -271,10 +273,23 @@ private:
 	//拷贝构造
 	CClientSocket(const CClientSocket& ss)
 	{
+		m_hThread = INVALID_HANDLE_VALUE;
 		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
+		struct {
+			UINT message;
+			MSGFUNC func;
+		}funcs[] = {
+			{WM_SEND_PACK, &CClientSocket::SendPack},
+			{0, NULL},
+		};
+		for (int i = 0; funcs[i].message != 0; ++i) {
+			if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false);
+			TRACE("插入失败，消息指： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i); 
+		}
+		
 	}
 
 	CClientSocket& operator=(const CClientSocket& ss) {}
@@ -303,6 +318,7 @@ private:
 
 	static void threadEntry(void* arg);
 	void threadFunc();
+	void threadFunc2(); //线程接收消息，线程中调用注册好的回调函数
 
 	BOOL InitSockEnv() {
 		WSADATA data;
@@ -339,6 +355,7 @@ private:
 		return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
 	}
 
+	void SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam);
 
 	static CClientSocket* m_instance; //设置成静态成员，供静态函数访问
 	//CServerSocket* m_instance;

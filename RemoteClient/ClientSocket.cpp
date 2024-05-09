@@ -129,9 +129,11 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 				std::map<HANDLE, bool>::iterator it0 = m_mapAutoClosed.find(head.hEvent);
 				auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>&>(head.hEvent, std::list<CPacket>()));
 
+
 				do {
 					//int length = recv(m_sock, pBuffer, BUFFERSIZE - index, 0); //这里导致bug
 					int length = recv(m_sock, pBuffer + index, BUFFERSIZE - index, 0);
+					TRACE("recv %d %d\r\n", length, index); //recv为0时
 					if (length > 0 || (index > 0)) { //读取成功
 						//解包
 						index += length;
@@ -156,7 +158,14 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 					else if (length <= 0 && index <= 0) {
 						CloseSocket();
 						SetEvent(head.hEvent);
-						m_mapAutoClosed.erase(it0);  //需要将AutoClosed的状态清楚
+						if (it0 != m_mapAutoClosed.end()) {
+							m_mapAutoClosed.erase(it0);
+							//TRACE("SetEvent %d %d \r\n", head.sCmd, it0->second);
+						}
+						else {
+							TRACE("异常情况，没有对应的pair\r\n");
+						}
+						//m_mapAutoClosed.erase(it0);  //需要将AutoClosed的状态清楚
 						break; //在AutoClose为false的时候需要进行break，不然会一直卡在里面循环
 					}
 
@@ -165,6 +174,7 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 			}
 			m_lock.lock();
 			m_lstSend.pop_front();
+			m_mapAutoClosed.erase(head.hEvent);
 			m_lock.unlock();
 			if (InitSocket() == false) {
 				InitSocket();
@@ -175,4 +185,35 @@ void CClientSocket::threadFunc() //开一个线程来接收数据
 	}
 	CloseSocket();
 }
+void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/)
+//消息处理函数的应答也是消息，会将内容放到wParam和lParam中
+{//需要定义一个消息的数据结构(数据长度，模式autoclose等)， 回调消息的数据结构(需要知道：窗口的HANDLE， MESSAGE)
+	if (InitSocket() == true) {
+		int ret = send(m_sock, (char*)wParam, (int)lParam, 0);
+		if (ret > 0) {
+
+		}
+		else {
+			CloseSocket();
+			//网络终止处理
+		}
+	}
+	else {
+
+	}
+	if (m_sock == -1) return;
+	
+	//TODO:
+}
 //10.6.8问题：客户端按照长连接进行，而server每处理完一个东西就关闭socket，导致再次发送时候就失败
+
+void CClientSocket::threadFunc2() {
+	MSG msg;
+	while (::GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
+			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);
+		}
+	}
+}

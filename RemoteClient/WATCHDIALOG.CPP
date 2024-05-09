@@ -8,6 +8,10 @@ CPoint CWatchDialog::UserPoint2RemoteScreenPoint(CPoint& point, bool isScreen = 
 	//CPoint cur = point;
 	CRect clientRect;
 	if (isScreen) ScreenToClient(&point); //全局坐标到客户区域坐标
+	else {  //如果不是占满
+		ClientToScreen(&point); //转换为相对屏幕左上角的坐标(屏幕内的绝对坐标)
+		m_picture.ScreenToClient(&point); //转换成客户区域的坐标(相对于picture控件左上角的坐标
+	}
 	m_picture.GetWindowRect(clientRect); 
 	//远程端的坐标转换：等比缩放
 	int width0 = clientRect.Width();

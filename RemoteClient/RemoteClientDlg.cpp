@@ -298,6 +298,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, 
 		(BYTE*)(LPCTSTR)strPath, strPath.GetLength(), &lstPackets); //如果不是多字符集:这里只传进去了D而不是"D:\\"
 	if (lstPackets.size() > 0) {
+		TRACE("lstPacket.size = %d\r\n", lstPackets.size());
 		//往后处理
 		std::list<CPacket>::iterator it = lstPackets.begin();
 		for (; it != lstPackets.end(); it++) {
