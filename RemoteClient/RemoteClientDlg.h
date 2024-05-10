@@ -6,8 +6,9 @@
 #include "ClientSocket.h"
 #include "StatusDlg.h"
 #include "WatchDialog.h"
-#define WM_SEND_PACKET (WM_USER + 1) //发送数据包的消息
-
+#ifndef WM_SEND_PACK_ACK
+#define WM_SEND_PACK_ACK (WM_USER+2)
+#endif
 // CRemoteClientDlg 对话框
 class CRemoteClientDlg : public CDialogEx
 {
@@ -77,4 +78,6 @@ public:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnIpnFieldchangedIpaddressctrl(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnEnChangePortctrl();
+
+	afx_msg LRESULT OnSendPakcetAck(WPARAM wParam, LPARAM lParam);
 };

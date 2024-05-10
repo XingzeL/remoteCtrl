@@ -42,6 +42,7 @@ BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_STN_CLICKED(IDC_WATCH, &CWatchDialog::OnStnClickedWatch)
 	ON_BN_CLICKED(IDC_LOCK, &CWatchDialog::OnBnClickedLock)
 	ON_BN_CLICKED(IDC_UNLOCK, &CWatchDialog::OnBnClickedUnlock)
+	ON_MESSAGE(WM_SEND_PACK_ACK, &CWatchDialog::OnSendPakcetAck)
 END_MESSAGE_MAP()
 
 

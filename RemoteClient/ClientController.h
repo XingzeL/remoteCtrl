@@ -52,7 +52,8 @@ public:
 	bool SendCommandPacket(
 		HWND hWnd, //数据包收到后，需要应答的窗口
 		int nCmd, bool bAutoClose = true,
-		BYTE* pData = NULL, size_t nLength = 0);
+		BYTE* pData = NULL, size_t nLength = 0,
+		WPARAM wParam = 0);
 
 	int GetImage(CImage& image) { //mem to image的功能，可以封装走 -> 多线程时代弃用
 
@@ -62,6 +63,7 @@ public:
 	}
 
 	int DownFile(CString strPath);
+	void DownloadEnd();
 
 	void StartWatchScreen();
 

@@ -56,12 +56,12 @@ LRESULT CClientController::SendMessage(MSG msg)
     return info.result; //拿到消息处理的返回值
 }
 
-bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength) //传入lstPack指针，可以分辨关心应答还是不关心
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam) //传入lstPack指针，可以分辨关心应答还是不关心
 {
     TRACE("cmd:%d %s start %lld \r\n", nCmd, __FUNCTION__, GetTickCount64());
     CClientSocket* pClient = CClientSocket::getInstance();
 
-    return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
+    return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
    
 }
 
@@ -76,14 +76,14 @@ int CClientController::DownFile(CString strPath)
         m_strRemote = strPath;
         m_strLocal = dlg.GetPathName();
         CString strLocal = dlg.GetPathName(); //MFC的API,得到路径，想要传入线程中
-        /*****************添加线程函数****************/
-        m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-        //_beginthreadex是想要拿到线程ID的时候使用,里面传入的函数指针需要是unsigned __stdcall
-
-        if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
-            //说明线程被创建还不会立刻结束，所以等待超时说明线程被成功创建,否则就是失败
+        FILE* pFile = fopen(m_strLocal, "wb+");
+        if (pFile == NULL) {
+            AfxMessageBox("本地没有权限保存该文件或者无法创建文件！！");
             return -1;
         }
+        SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile); //发送消息：线程消息：传了pFile信息，网络包：命令4， 不自动关闭，文件的路径
+
+        //修改remoteDlg状态，弹出窗口
         m_remoteDlg.BeginWaitCursor();
         m_statusDlg.m_info.SetWindowText(_T("命令正在执行中"));
         m_statusDlg.ShowWindow(SW_SHOW);
@@ -92,6 +92,13 @@ int CClientController::DownFile(CString strPath)
         //Sleep(50); //进行一些延时，等待鼠标位置被拿到
     }
     return 0;
+}
+
+void CClientController::DownloadEnd()
+{
+    m_statusDlg.ShowWindow(SW_HIDE);
+    m_remoteDlg.EndWaitCursor();
+    m_remoteDlg.MessageBox(_T("下载完成！"), _T("完成"));
 }
 
 void CClientController::StartWatchScreen()
@@ -159,14 +166,14 @@ void CClientController::threadDownloadFile()
         //int ret = SendMessage(WM_SEND_PACKET, 4 << 1 | 0, (LPARAM)(LPCSTR)strFile); //2.改为在V层发送消息，主线程接收后进行包的发送
         int ret = SendCommandPacket(m_remoteDlg,4, false,
             (BYTE*)(LPCSTR)m_strRemote,
-            m_strRemote.GetLength());  //
+            m_strRemote.GetLength(), (WPARAM)pFile);  //消息机制：线程间信息传递pFile
 
         if (ret < 0) {
             AfxMessageBox(_T("执行下载命令失败!!!"));
             TRACE("执行下载失败: ret = %d\r\n", ret);
             break;
         }
-        //进行接收
+        //进行接收 - 放到了消息ack中了
         //1.longlong 长度  
 
         long long nlength = *(long long*)CClientSocket::getInstance()->GetPack().strData.c_str();

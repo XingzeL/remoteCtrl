@@ -30,7 +30,7 @@ BOOL CWatchDialog::OnInitDialog()
 
 	// TODO:  在此添加额外的初始化
 	m_isFull = false;
-	SetTimer(0, 20, NULL); //设置定时器
+	//SetTimer(0, 20, NULL); //设置定时器
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常: OCX 属性页应返回 FALSE
 }
@@ -38,33 +38,7 @@ BOOL CWatchDialog::OnInitDialog()
 
 void CWatchDialog::OnTimer(UINT_PTR nIDEvent) //定时取得图像的功能函数
 {
-	if (nIDEvent == 0) {
-		CClientController* pController = CClientController::getInstance();
-		if (m_isFull) { //本次设计将isFull的状态成员从主窗口转移到了watchDlg对象中
-			//应该得到WATCH的DC，也就是显示内容的部分
-			
-			CRect rect;
-			m_picture.GetWindowRect(rect);
-		
-			//pController->GetImage(m_image);
-			if (m_nObjWidth == -1) {
-				m_nObjWidth = m_image.GetWidth();
-			}
 
-			if (m_nObjHeight == -1) {
-				m_nObjHeight = m_image.GetHeight();
-			}
-			//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-			m_image.StretchBlt(
-				m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
-			m_picture.InvalidateRect(NULL);
-			m_image.Destroy(); //对CImage的操作
-			m_isFull = false;//已读取缓冲中的内容，可以读了
-			TRACE("更新图片完成\r\n");
-			//SetImageStatus(false); 
-		}
-	}
-	CDialog::OnTimer(nIDEvent);
 }
 
 //鼠标事件：
@@ -79,6 +53,60 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent) //定时取得图像的功能函数
 //	WORD nButton; //左键，右键，中键
 //	POINT ptXY; //坐标
 //}MOUSEEV, * PMOUSEEV;
+
+LRESULT CWatchDialog::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
+{
+	if (lParam == -1 || (lParam == -2)) {
+		//TODO: 错误处理
+	}
+	else if (lParam == 1) {
+		//对方关闭了套接字
+	}
+	else 
+	{
+		CPacket* pPacket = (CPacket*)wParam;
+		if (pPacket != NULL) {
+			switch(pPacket->sCmd) {
+			case 6:
+			{
+				//屏幕的包，要进行显示
+				if (m_isFull) {
+					Cutils::Bytes2Image(m_image, pPacket->strData);
+					CRect rect;
+					m_picture.GetWindowRect(rect);
+
+					//pController->GetImage(m_image);
+					if (m_nObjWidth == -1) {
+						m_nObjWidth = m_image.GetWidth();
+					}
+
+					if (m_nObjHeight == -1) {
+						m_nObjHeight = m_image.GetHeight();
+					}
+					//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
+					m_image.StretchBlt(
+						m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
+					m_picture.InvalidateRect(NULL);
+					m_image.Destroy(); //对CImage的操作
+					m_isFull = false;//已读取缓冲中的内容，可以读了
+					TRACE("更新图片完成\r\n");
+					//SetImageStatus(false); 
+				}
+				break;
+			}
+			case 5: 
+				break;
+			case 7: //锁屏
+				break;
+			case 8:
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	return 0;
+}
 
 void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 {

@@ -61,15 +61,16 @@ bool CClientSocket::InitSocket()
 	return true;
 }
 
-bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose)
+bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose, WPARAM wParam)
 {
 	if (m_hThread == INVALID_HANDLE_VALUE) {
 		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
-	}
+	} //第一次发现没有消息处理线程的话就创建一个
 	UINT nMode = isAutoClose ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode),
+	//有消息接收线程：发送给对应的线程号对应的消息和包，目前只发WM_SEND_PACK消息，包不一样，得到的响应就不同，对应不同响应会再OnSendPacketAck中对号入座(使用switch-case)
+	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam),
 		(LPARAM)hWnd);
 	//发送消息给消息线程
 }
@@ -262,7 +263,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 					size_t nLen = index;
 					CPacket pack((BYTE*)pBuffer, index);
 					if (nLen > 0) {
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), NULL);
+						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
 						if (data.nMode & CSM_AUTOCLOSE) {
 							
 							CloseSocket();
@@ -277,7 +278,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 				else {
 					//对方关闭了socket或者网络设备异常
 					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, NULL); //响应 通知结束
+					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, 1); //响应 通知结束
 				}
 			}
 		}

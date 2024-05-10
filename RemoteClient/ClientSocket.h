@@ -148,22 +148,26 @@ enum {
 	CSM_AUTOCLOSE=1, //CSM = Client Socket Mode 自动关闭模式
 };
 
-typedef struct PacketData{ //消息中传输的Packet，有2个元素，data和mode
-	std::string strData;
-	UINT nMode;
-	PacketData(const char* pData, size_t nLen, UINT mode) {
+typedef struct PacketData{ //线程间消息中传输的Packet，有2个元素，data和mode
+	std::string strData; //用于发送出去的信息包
+	UINT nMode; //
+	WPARAM wParam; //用来线程之间传输的信息
+	PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam = 0) {
 		strData.resize(nLen);
 		memcpy((char*)strData.c_str(), pData, nLen);
 		nMode = mode;
+		wParam = nParam;
 	}
 	PacketData(const PacketData& data) {
 		strData = data.strData;
 		nMode = data.nMode;
+		wParam = data.wParam;
 	}
 	PacketData& operator=(const PacketData& data) {
 		if (this != &data) {
 			strData = data.strData;
 			nMode = data.nMode;
+			wParam = data.wParam;
 		}
 		return *this;
 	}
@@ -238,7 +242,7 @@ public:
 
 	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks,
 	//	bool isAutoClose = true);
-	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose = true);
+	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose = true, WPARAM wParam = 0);
 
 	bool GetFilePath(std::string& strPath) {
 		//获取文件列表

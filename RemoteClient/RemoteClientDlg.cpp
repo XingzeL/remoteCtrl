@@ -103,6 +103,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_TIMER()
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESSCTRL, &CRemoteClientDlg::OnIpnFieldchangedIpaddressctrl)
 	ON_EN_CHANGE(IDC_PORTCTRL, &CRemoteClientDlg::OnEnChangePortctrl)
+
+	ON_MESSAGE(WM_SEND_PACK_ACK, &CRemoteClientDlg::OnSendPakcetAck)
 END_MESSAGE_MAP()
 
 
@@ -222,41 +224,11 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket> lstPackets;
 	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 1, true, NULL, 0);
-	if (ret == -1 || (lstPackets.size() <= 0)) {
-		AfxMessageBox(_T("命令处理失败"));
+	if (ret == 0) {
+		AfxMessageBox(_T("消息处理失败"));
 		return;
 	}
-	CPacket& head = lstPackets.front();
 
-	std::string drivers = head.strData;
-	CString dr;
-
-	// 删除树控件中的所有项
-	m_Tree.DeleteAllItems();
-
-	// 循环遍历字符串
-	for (size_t i = 0; i < drivers.size(); ++i) {
-		// 如果遇到逗号，将当前子字符串插入树控件并清空临时字符串
-		if (drivers[i] == ',') {
-			dr += ":"; //windows磁盘的标号
-			//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
-			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
-			HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
-			m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
-			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
-			dr.Empty();
-			continue;
-		}
-		// 将字符添加到临时字符串中
-		dr += drivers[i];
-	}
-
-	 //插入最后一个子字符串
-	if (!dr.IsEmpty()) {
-		dr += ":"; //windows磁盘的标号
-		HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
-		m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
-	}
 }
 
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
@@ -295,7 +267,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	//传给服务器：得到文件信息
 	std::list<CPacket> lstPackets;
 	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 2, false,
-		(BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //如果不是多字符集:这里只传进去了D而不是"D:\\"
+		(BYTE*)(LPCTSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected); //如果不是多字符集:这里只传进去了D而不是"D:\\"
 	if (lstPackets.size() > 0) {
 		TRACE("lstPacket.size = %d\r\n", lstPackets.size());
 		//往后处理
@@ -495,4 +467,123 @@ void CRemoteClientDlg::OnEnChangePortctrl()
 	UpdateData();
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdataAddress(m_server_address, _tstoi(m_nPort));
+}
+
+LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
+{
+	if (lParam == -1 || (lParam == -2)) {
+		//TODO: 错误处理
+	}
+	else if (lParam == 1) {
+		//对方关闭了套接字
+	}
+	else {
+		CPacket* pPacket = (CPacket*)wParam;
+		
+		if (pPacket != NULL) {
+			CPacket& head = *pPacket; //得到响应的packet
+			switch (pPacket->sCmd) {
+
+			case 1: //获取驱动信息
+			{
+
+				std::string drivers = head.strData;
+				CString dr;
+
+				// 删除树控件中的所有项
+				m_Tree.DeleteAllItems();
+
+				// 循环遍历字符串
+				for (size_t i = 0; i < drivers.size(); ++i) {
+					// 如果遇到逗号，将当前子字符串插入树控件并清空临时字符串
+					if (drivers[i] == ',') {
+						dr += ":"; //windows磁盘的标号
+						//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
+						//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+						HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+						m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
+						//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+						dr.Empty();
+						continue;
+					}
+					// 将字符添加到临时字符串中
+					dr += drivers[i];
+				}
+
+				//插入最后一个子字符串
+				if (!dr.IsEmpty()) {
+					dr += ":"; //windows磁盘的标号
+					HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+					m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
+				}
+				break;
+			}
+				
+			case 2: //获取文件信息
+			{
+				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();
+				if (pInfo->HasNext == FALSE) break;
+				if (pInfo->IsDirectory) {
+					if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
+						break;
+					}
+					//hTreeSelected应该再remoteDLg中阻塞地拿到，如果要两个线程发消息得到的话可能有问题
+					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);
+					m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+				}
+				else {
+					//是文件的情况
+					/*m_List.InsertItem(0, pInfo->szFileName);*/
+					m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
+					m_List.UpdateWindow();
+					TRACE("文件名：%s", pInfo->szFileName);
+					//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
+				}
+				}
+				break;
+			case 3: //运行文件
+				TRACE("run file done!\r\n");
+				break;
+			case 4:
+			{
+				static LONGLONG length = 0, index = 0; //length: 文件的长度； index：一共收到多少字节
+				if (length == 0) { //刚刚开始接收
+					length = *(long long*)head.strData.c_str();
+					if (length == 0) {
+						AfxMessageBox("文件长度为零或者无法读取文件！！");
+						CClientController::getInstance()->DownloadEnd();
+						break; //跳出do的循环，进入外面的关闭连接
+					}
+				}
+				else if (length > 0 && (index >= length)) { //接收完成
+					fclose((FILE*)lParam);
+					length = 0;
+					index = 0;
+					CClientController::getInstance()->DownloadEnd();
+				}
+				else { //接收的中途
+					FILE* pFile = (FILE*)lParam;
+					fwrite(head.strData.c_str(),1, head.strData.size(), pFile);
+					index += head.strData.size();
+					/*
+					fwrite: 1: element size，一次写入的字节数; head.strData.size() 次数
+					如当每次写4k字节，当写最后一个4k时候空间不够了，写了399k后事变，会返回99，表示成功写了99次
+					*/
+				}
+				
+			}
+			break;
+			case 9: //删除文件 不需要对响应进行处理
+				TRACE("delete file done!\r\n");
+				break;
+			case 1981:
+				TRACE("test connected success!\r\n");
+				break;
+			default:
+				TRACE("unknow data received!\r\n", head.sCmd);
+				break;
+			}
+		}
+	}
+	return 0;
 }
