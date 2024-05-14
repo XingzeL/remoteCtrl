@@ -523,6 +523,7 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 			case 2: //获取文件信息
 			{
 				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();
+				TRACE("hasnext: %d, isDirectory %d \r\n", pInfo->HasNext, pInfo->IsDirectory, pInfo->szFileName);
 				if (pInfo->HasNext == FALSE) break;
 				if (pInfo->IsDirectory) {
 					if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {

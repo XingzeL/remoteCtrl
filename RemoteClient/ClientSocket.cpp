@@ -156,7 +156,7 @@ CClientSocket::CClientSocket():
 	};
 	for (int i = 0; funcs[i].message != 0; ++i) {
 		if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false);
-		TRACE("插入失败，消息指： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i);
+		TRACE("插入失败，消息值： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i);
 	}
 
 }
