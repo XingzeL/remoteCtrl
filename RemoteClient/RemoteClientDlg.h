@@ -15,7 +15,7 @@ class CRemoteClientDlg : public CDialogEx
 // 构造
 public:
 	CRemoteClientDlg(CWnd* pParent = nullptr);	// 标准构造函数
-
+	void LoadFileInfo(); 
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_REMOTECLIENT_DIALOG };
@@ -28,7 +28,7 @@ public:
 
 	void DeleteTreeChildrenItem(HTREEITEM hTree);
 	CString GetPath(HTREEITEM hTree);
-	void LoadFileInfo();
+
 	void LoadFileCurrent();
 	//static void threadEntryForDownLoadFile(void* arg);
 	//static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this

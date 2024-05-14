@@ -259,6 +259,9 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 	//俩线程之间发送数据，如果发送的是一个局部变量的话可能会在这个线程使用之前就释放了
 	delete (PACKET_DATA*)wParam; //另一个线程传来的包是new出来的，接收到后，复制内容，当场释放，这个在响应函数中也应当使用
 	HWND hWnd = (HWND)lParam;
+	//以下是防止server关闭了socket，但是这边还有一两个包没接收的情况：current包
+	size_t nTemp = data.strData.size();
+	CPacket current((BYTE*)data.strData.c_str(), nTemp);
 	if (InitSocket() == true) {
 
 		int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0); //将Packet的内容发送出去
@@ -281,15 +284,17 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 							CloseSocket();
 							return;
 						}
+						index -= nLen;
+						//memmove(pBuffer, pBuffer + index, nLen);
+						memmove(pBuffer, pBuffer + nLen, index);
 					}
-					
-					index -= nLen;
-					memmove(pBuffer, pBuffer + index, nLen);
 				}
 				else {
+					TRACE("recv failed length %d, index %d\r\n", length, index);
 					//对方关闭了socket或者网络设备异常
 					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, 1); //响应 通知结束
+
+					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1); //响应 通知结束
 				}
 			}
 		}

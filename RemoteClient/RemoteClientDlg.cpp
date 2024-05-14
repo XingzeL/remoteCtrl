@@ -507,6 +507,7 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 					//hTreeSelected应该再remoteDLg中阻塞地拿到，如果要两个线程发消息得到的话可能有问题
 					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);
 					m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND); //展开节点 这里需要自己展开 为什么以前不需要自己展开
 				}
 				else {
 					//是文件的情况
@@ -543,6 +544,13 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 					FILE* pFile = (FILE*)lParam;
 					fwrite(head.strData.c_str(),1, head.strData.size(), pFile);
 					index += head.strData.size();
+					TRACE("index = %d\r\n", index);
+					if (index >= length) {
+						fclose((FILE*)lParam);
+						length = 0;
+						index = 0;
+						CClientController::getInstance()->DownloadEnd();
+					}
 					/*
 					fwrite: 1: element size，一次写入的字节数; head.strData.size() 次数
 					如当每次写4k字节，当写最后一个4k时候空间不够了，写了399k后事变，会返回99，表示成功写了99次
