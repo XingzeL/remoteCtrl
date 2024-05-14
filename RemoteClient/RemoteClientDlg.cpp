@@ -262,36 +262,9 @@ void CRemoteClientDlg::LoadFileInfo()
 	//准备获取这个节点的信息
 	CString strPath = GetPath(hTreeSelected); //拿到这个节点的路径，准备传给server端
 
-	//没有调成多字节字符集之前类型转换就没有用
-	BYTE* pData = (BYTE*)(LPCTSTR)strPath;
-	//传给服务器：得到文件信息
-	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 2, false,
+	TRACE("hTreeSelected %08X\r\n", hTreeSelected);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd() /*拿到当前句柄*/, 2, false,
 		(BYTE*)(LPCTSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected); //如果不是多字符集:这里只传进去了D而不是"D:\\"
-	if (lstPackets.size() > 0) {
-		TRACE("lstPacket.size = %d\r\n", lstPackets.size());
-		//往后处理
-		std::list<CPacket>::iterator it = lstPackets.begin();
-		for (; it != lstPackets.end(); it++) {
-			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();
-			if (pInfo->HasNext == FALSE) continue;
-			if (pInfo->IsDirectory) {
-				if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
-					continue;
-				}
-				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
-				m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
-			}
-			else {
-				//是文件的情况
-				/*m_List.InsertItem(0, pInfo->szFileName);*/
-				m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
-				m_List.UpdateWindow();
-				TRACE("文件名：%s", pInfo->szFileName);
-				//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
-			}
-		}
-	}
 
 	//注意：有一个点上不断双击时，需要保证不累积
 
@@ -478,6 +451,8 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 		//对方关闭了套接字
 	}
 	else {
+
+
 		CPacket head = *(CPacket*)wParam;
 		
 		
@@ -541,8 +516,9 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 					TRACE("文件名：%s", pInfo->szFileName);
 					//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
 				}
-				}
 				break;
+			}
+				
 			case 3: //运行文件
 				TRACE("run file done!\r\n");
 				break;

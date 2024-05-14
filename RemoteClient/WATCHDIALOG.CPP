@@ -72,7 +72,7 @@ LRESULT CWatchDialog::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 			case 6:
 			{
 				//屏幕的包，要进行显示
-				Cutils::Bytes2Image(m_image, pPacket->strData);
+				Cutils::Bytes2Image(m_image, head.strData); //注意这个需要改成head，而不是以前的pPacket,那个的数据被转移给了head
 				CRect rect;
 				m_picture.GetWindowRect(rect);
 

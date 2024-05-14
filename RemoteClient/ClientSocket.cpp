@@ -73,7 +73,7 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose,
 	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam);
 	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)pData,(LPARAM)hWnd);
 	//发送消息给消息线程
-	if (ret = false) {
+	if (ret == false) {
 		delete pData;
 	}
 	return ret;
@@ -155,8 +155,8 @@ CClientSocket::CClientSocket():
 		{0, NULL},
 	};
 	for (int i = 0; funcs[i].message != 0; ++i) {
-		if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false);
-		TRACE("插入失败，消息值： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i);
+		if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false)
+			TRACE("插入失败，消息值： %d  函数值： %08X  序号：%d\r\n", funcs[i].message, funcs[i].func, i);
 	}
 
 }
@@ -272,7 +272,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 				if (length > 0 || (index > 0)) { //length: 收到的数据； index: 缓冲区中的数据
 					index += (size_t)length;
 					size_t nLen = index;
-					CPacket pack((BYTE*)pBuffer, index);
+					CPacket pack((BYTE*)pBuffer, nLen);
 					if (nLen > 0) {
 						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
 						//为了跨线程传输包，并且保证生命周期，传给另一个线程的包应该是new出来的
@@ -281,9 +281,8 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 							CloseSocket();
 							return;
 						}
-						HWND hWnd = (HWND)lParam;
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, NULL); //有可能hWnd的窗口已经关闭了，会造成内存泄露
 					}
+					
 					index -= nLen;
 					memmove(pBuffer, pBuffer + index, nLen);
 				}
