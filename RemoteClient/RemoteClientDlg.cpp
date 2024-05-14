@@ -525,7 +525,11 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 				break;
 			case 4:
 			{
-				static LONGLONG length = 0, index = 0; //length: 文件的长度； index：一共收到多少字节
+				static LONGLONG length = 0; //length: 文件的长度； index：一共收到多少字节
+				static LONGLONG index = 0;
+				TRACE("length %d, index %d", length, index);
+				TRACE("length is %d\r\n", length); //1.出现过length正常，index一直是0的情况：当单独打印的时候index正常，这是怎么回事
+				TRACE("index is %d\r\n", index);
 				if (length == 0) { //刚刚开始接收
 					length = *(long long*)head.strData.c_str();
 					if (length == 0) {
@@ -534,7 +538,7 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 						break; //跳出do的循环，进入外面的关闭连接
 					}
 				}
-				else if (length > 0 && (index >= length)) { //接收完成
+				else if (length > 0 && (index >= length)) { //不是第一册接收(length > 0)且接收到的长度超过文件长度
 					fclose((FILE*)lParam);
 					length = 0;
 					index = 0;
@@ -544,13 +548,13 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 					FILE* pFile = (FILE*)lParam;
 					fwrite(head.strData.c_str(),1, head.strData.size(), pFile);
 					index += head.strData.size();
-					TRACE("index = %d\r\n", index);
-					if (index >= length) {
-						fclose((FILE*)lParam);
-						length = 0;
-						index = 0;
-						CClientController::getInstance()->DownloadEnd();
-					}
+					TRACE("index = %d\r\n", index);  //2.这里的index没有出现过index = 0的情况，且和上面的index的值不同！
+					//if (index >= length) { //加一个结束操作，因为可能在这个分支文件就已经写完了 ps：之后测试发现这里似乎不用加
+					//	fclose((FILE*)lParam);
+					//	length = 0;
+					//	index = 0;
+					//	CClientController::getInstance()->DownloadEnd();
+					//}
 					/*
 					fwrite: 1: element size，一次写入的字节数; head.strData.size() 次数
 					如当每次写4k字节，当写最后一个4k时候空间不够了，写了399k后事变，会返回99，表示成功写了99次
