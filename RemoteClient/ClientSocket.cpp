@@ -70,10 +70,12 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose,
 	std::string strOut;
 	pack.Data(strOut);
 	//有消息接收线程：发送给对应的线程号对应的消息和包，目前只发WM_SEND_PACK消息，包不一样，得到的响应就不同，对应不同响应会再OnSendPacketAck中对号入座(使用switch-case)
-	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam),
-		(LPARAM)hWnd);
+	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam);
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)pData,(LPARAM)hWnd);
 	//发送消息给消息线程
-
+	if (ret = false) {
+		delete pData;
+	}
 	return ret;
 }
 
@@ -280,7 +282,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 							return;
 						}
 						HWND hWnd = (HWND)lParam;
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, NULL);
+						::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, NULL); //有可能hWnd的窗口已经关闭了，会造成内存泄露
 					}
 					index -= nLen;
 					memmove(pBuffer, pBuffer + index, nLen);

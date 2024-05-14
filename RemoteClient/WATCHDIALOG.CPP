@@ -66,35 +66,33 @@ LRESULT CWatchDialog::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 	{
 		CPacket* pPacket = (CPacket*)wParam;
 		if (pPacket != NULL) {
-			switch(pPacket->sCmd) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;
+			switch(head.sCmd) {
 			case 6:
 			{
 				//屏幕的包，要进行显示
-				if (m_isFull) {
-					Cutils::Bytes2Image(m_image, pPacket->strData);
-					CRect rect;
-					m_picture.GetWindowRect(rect);
+				Cutils::Bytes2Image(m_image, pPacket->strData);
+				CRect rect;
+				m_picture.GetWindowRect(rect);
 
-					//pController->GetImage(m_image);
-					if (m_nObjWidth == -1) {
-						m_nObjWidth = m_image.GetWidth();
-					}
-
-					if (m_nObjHeight == -1) {
-						m_nObjHeight = m_image.GetHeight();
-					}
-					//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-					m_image.StretchBlt(
-						m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
-					m_picture.InvalidateRect(NULL);
-					m_image.Destroy(); //对CImage的操作
-					m_isFull = false;//已读取缓冲中的内容，可以读了
-					TRACE("更新图片完成\r\n");
-					//SetImageStatus(false); 
+				//pController->GetImage(m_image);
+				if (m_nObjWidth == -1) {
+					m_nObjWidth = m_image.GetWidth();
 				}
+
+				if (m_nObjHeight == -1) {
+					m_nObjHeight = m_image.GetHeight();
+				}
+				//nParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
+				m_image.StretchBlt(
+					m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
+				m_picture.InvalidateRect(NULL);
+				m_image.Destroy(); //对CImage的操作
 				break;
 			}
 			case 5: 
+				TRACE("远程应答了鼠标操作");
 				break;
 			case 7: //锁屏
 				break;
@@ -221,7 +219,7 @@ void CWatchDialog::OnRButtonUp(UINT nFlags, CPoint point)
 
 void CWatchDialog::OnMouseMove(UINT nFlags, CPoint point)  //在类视图中添加的信号处理函数，得到的point坐标就是
 {
-	if (m_nObjHeight != -1 && m_nObjWidth != -1) {
+	if ((m_nObjHeight != -1) && (m_nObjWidth != -1)) {
 		CPoint remote = UserPoint2RemoteScreenPoint(point, false);
 		//封装
 		MouseEvent event;
