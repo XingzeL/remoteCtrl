@@ -63,16 +63,18 @@ bool CClientSocket::InitSocket()
 
 bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose, WPARAM wParam)
 {
-	if (m_hThread == INVALID_HANDLE_VALUE) {
-		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
-	} //第一次发现没有消息处理线程的话就创建一个
+	//if (m_hThread == INVALID_HANDLE_VALUE) {
+	//	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
+	//} //第一次发现没有消息处理线程的话就创建一个
 	UINT nMode = isAutoClose ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
 	pack.Data(strOut);
 	//有消息接收线程：发送给对应的线程号对应的消息和包，目前只发WM_SEND_PACK消息，包不一样，得到的响应就不同，对应不同响应会再OnSendPacketAck中对号入座(使用switch-case)
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam),
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam),
 		(LPARAM)hWnd);
 	//发送消息给消息线程
+
+	return ret;
 }
 
 /* 队列机制时候的SendPacket
@@ -133,6 +135,13 @@ CClientSocket::CClientSocket():
 		MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置"), _T("初始化错误"), MB_OK | MB_ICONERROR);
 		exit(0); //结束进程
 	}
+	m_eventInvoke = CreateEvent(NULL, TRUE, FALSE, NULL); //默认，自动重置，初始值为未处理，名字为""
+	
+	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);
+	if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {
+		TRACE("网络消息处理线程启动失败!\r\n");
+	}
+	CloseHandle(m_eventInvoke); //之后就不需要这个event了
 	//m_sock = socket(PF_INET, SOCK_STREAM, 0); //选择协议族：IPV4， stream：TCP协议
 	m_buffer.resize(BUFFERSIZE);
 	memset(m_buffer.data(), 0, BUFFERSIZE);
@@ -246,7 +255,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 {//需要定义一个消息的数据结构(数据长度，模式autoclose等)， 回调消息的数据结构(需要知道：窗口的HANDLE， MESSAGE)
 	PACKET_DATA data = *(PACKET_DATA*)wParam; //把内容复制到本地来，防止另一个线程的局部变量被释放
 	//俩线程之间发送数据，如果发送的是一个局部变量的话可能会在这个线程使用之前就释放了
-	delete (PACKET_DATA*)wParam;
+	delete (PACKET_DATA*)wParam; //另一个线程传来的包是new出来的，接收到后，复制内容，当场释放，这个在响应函数中也应当使用
 	HWND hWnd = (HWND)lParam;
 	if (InitSocket() == true) {
 
@@ -264,6 +273,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 					CPacket pack((BYTE*)pBuffer, index);
 					if (nLen > 0) {
 						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
+						//为了跨线程传输包，并且保证生命周期，传给另一个线程的包应该是new出来的
 						if (data.nMode & CSM_AUTOCLOSE) {
 							
 							CloseSocket();
@@ -297,6 +307,8 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lPar
 //10.6.8问题：客户端按照长连接进行，而server每处理完一个东西就关闭socket，导致再次发送时候就失败
 
 void CClientSocket::threadFunc2() {
+	//设置event为已处理
+	SetEvent(m_eventInvoke); 
 	MSG msg;
 	while (::GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);

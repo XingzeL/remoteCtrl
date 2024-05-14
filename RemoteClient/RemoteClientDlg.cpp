@@ -478,11 +478,12 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 		//对方关闭了套接字
 	}
 	else {
-		CPacket* pPacket = (CPacket*)wParam;
+		CPacket head = *(CPacket*)wParam;
 		
-		if (pPacket != NULL) {
-			CPacket& head = *pPacket; //得到响应的packet
-			switch (pPacket->sCmd) {
+		
+		if (wParam != NULL) {
+			delete (CPacket*)wParam;
+			switch (head.sCmd) {
 
 			case 1: //获取驱动信息
 			{
