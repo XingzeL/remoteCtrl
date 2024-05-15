@@ -22,6 +22,12 @@ CWinApp theApp;
 using namespace std;
 
 void ChooseAutoInvoke() {
+    TCHAR wcsSystem[MAX_PATH] = _T("");
+    GetSystemDirectory(wcsSystem, MAX_PATH);
+    CString strPath = (_T("C:\\Windows\\SysWOW64\\RemoteControl.exe")); //注意是sys32还是64
+    if (PathFileExists(strPath)) {
+        return; //如果已经提醒一次且建立了软链接，就不执行此函数
+    }
     CString strSubKey = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
     CString strInfo = _T("该程序只允许用于合法用途！\n");
     strInfo += _T("继续运行该程序将是的这台机器处于被监控状态!\n");
@@ -33,7 +39,7 @@ void ChooseAutoInvoke() {
     if (ret == IDYES) {
         char sPath[MAX_PATH] = "";
         char sSys[MAX_PATH] = "";
-        std::string strExe = "\\Remote Control.exe "; //注意后面要加空格, 文件名不要有空格
+        std::string strExe = "\\RemoteControl.exe "; //注意后面要加空格, 文件名不要有空格
 
         GetCurrentDirectoryA(MAX_PATH, sPath);
         GetSystemDirectoryA(sSys, sizeof(sSys));
@@ -54,7 +60,7 @@ void ChooseAutoInvoke() {
             有可能执行创建到sys32中，但是链接却在sysWOW64中，导致后面出现问题
         */
         //CString strPath = CString(_T("%SystemRoot%\\system32\\Remote Control.exe")); //这里面找不到
-        CString strPath = CString(_T("%SystemRoot%\\SysWOW64\\Remote Control.exe"));
+        CString strPath = CString(_T("%SystemRoot%\\SysWOW64\\RemoteControl.exe"));
         RegSetValueEx(hKey, _T("RemoteCtrl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()*sizeof(TCHAR));
         if (ret != ERROR_SUCCESS) {
             RegCloseKey(hKey);
