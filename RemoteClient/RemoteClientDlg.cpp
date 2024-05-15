@@ -140,17 +140,8 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO: 在此添加额外的初始化代码
-	UpdateData();
-	m_server_address = 0x7f000001; //本地回环
-	m_nPort = _T("9527");
+	InitUIData();
 
-	//更新连接数据
-	CClientController* pController = CClientController::getInstance();
-	pController->UpdataAddress(m_server_address, _tstoi(m_nPort));
-
-	UpdateData(FALSE);
-	m_dlgStatus.Create(IDD_DLG_STATUS, this); //初始化下载框
-	m_dlgStatus.ShowWindow(SW_HIDE);
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -256,7 +247,7 @@ void CRemoteClientDlg::LoadFileInfo()
 		return;
 	}
 	//看看选中的东西有没有子节点
-	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; //因为每个目录都加入了空的子节点，所以没有的话就是文件
+	//if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; //因为每个目录都加入了空的子节点，所以没有的话就是文件
 	DeleteTreeChildrenItem(hTreeSelected); //防止无限增长
 	m_List.DeleteAllItems();
 	//准备获取这个节点的信息
@@ -268,6 +259,48 @@ void CRemoteClientDlg::LoadFileInfo()
 
 	//注意：有一个点上不断双击时，需要保证不累积
 
+}
+void CRemoteClientDlg::DealCommand(WORD nCmd, const std::string& strData, LPARAM lParam)
+{
+	switch (nCmd) {
+
+	case 1: //获取驱动信息
+		Str2Tree(strData, m_Tree);
+		break;
+	case 2: //获取文件信息
+		//PFILEINFO pInfo = (PFILEINFO)strData.c_str();
+		UpdateFileInfo(*(PFILEINFO)strData.c_str(), (HTREEITEM)lParam);
+		break;
+	case 3: //运行文件
+		TRACE("run file done!\r\n");
+		break;
+	case 4:
+		UpdateDownLoadFile(strData, (FILE*)lParam);
+		break;
+	case 9: //删除文件 不需要对响应进行处理
+		TRACE("delete file done!\r\n");
+		break;
+	case 1981:
+		TRACE("test connected success!\r\n");
+		break;
+	default:
+		TRACE("unknow data received!\r\n", nCmd);
+		break;
+	}
+}
+void CRemoteClientDlg::InitUIData()
+{
+	UpdateData();
+	m_server_address = 0x7f000001; //本地回环
+	m_nPort = _T("9527");
+
+	//更新连接数据
+	CClientController* pController = CClientController::getInstance();
+	pController->UpdataAddress(m_server_address, _tstoi(m_nPort));
+
+	UpdateData(FALSE);
+	m_dlgStatus.Create(IDD_DLG_STATUS, this); //初始化下载框
+	m_dlgStatus.ShowWindow(SW_HIDE);
 }
 void CRemoteClientDlg::LoadFileCurrent()
 {
@@ -301,6 +334,99 @@ void CRemoteClientDlg::LoadFileCurrent()
 
 	//注意：有一个点上不断双击时，需要保证不累积
 	CClientController::getInstance()->CloseSocket();
+}
+
+void CRemoteClientDlg::Str2Tree(const std::string& drivers, CTreeCtrl& tree)
+{
+	CString dr;
+
+	// 删除树控件中的所有项
+	tree.DeleteAllItems();
+
+	// 循环遍历字符串
+	for (size_t i = 0; i < drivers.size(); ++i) {
+		// 如果遇到逗号，将当前子字符串插入树控件并清空临时字符串
+		if (drivers[i] == ',') {
+			dr += ":"; //windows磁盘的标号
+			//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
+			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+			HTREEITEM hTmp = tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+			tree.InsertItem(NULL, hTmp, TVI_LAST);
+			//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
+			dr.Empty();
+			continue;
+		}
+		// 将字符添加到临时字符串中
+		dr += drivers[i];
+	}
+
+	//插入最后一个子字符串
+	if (!dr.IsEmpty()) {
+		dr += ":"; //windows磁盘的标号
+		HTREEITEM hTmp = tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
+		tree.InsertItem(NULL, hTmp, TVI_LAST);
+	}
+}
+
+void CRemoteClientDlg::UpdateFileInfo(const FILEINFO& finfo, HTREEITEM hParent)
+{
+	TRACE("hasnext: %d, isDirectory %d \r\n", finfo.HasNext, finfo.IsDirectory, finfo.szFileName);
+	if (finfo.HasNext == FALSE) return;
+	if (finfo.IsDirectory) {
+		if (CString(finfo.szFileName) == "." || CString(finfo.szFileName) == "..") {
+			return;
+		}
+		//hTreeSelected应该再remoteDLg中阻塞地拿到，如果要两个线程发消息得到的话可能有问题
+		HTREEITEM hTemp = m_Tree.InsertItem(finfo.szFileName, hParent, TVI_LAST);
+		m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
+		m_Tree.Expand(hParent, TVE_EXPAND); //展开节点 这里需要自己展开 为什么以前不需要自己展开
+	}
+	else {
+		//是文件的情况
+		/*m_List.InsertItem(0, finfo.szFileName);*/
+		m_List.InsertItem(m_List.GetItemCount(), finfo.szFileName);
+		m_List.UpdateWindow();
+		TRACE("文件名：%s", finfo.szFileName);
+		//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
+	}
+}
+
+void CRemoteClientDlg::UpdateDownLoadFile(const std::string& strData, FILE* pFile)
+{
+	static LONGLONG length = 0; //length: 文件的长度； index：一共收到多少字节
+	static LONGLONG index = 0;
+	TRACE("length %d, index %d", length, index);
+	TRACE("length is %d\r\n", length); //1.出现过length正常，index一直是0的情况：当单独打印的时候index正常，这是怎么回事
+	TRACE("index is %d\r\n", index);
+	if (length == 0) { //刚刚开始接收
+		length = *(long long*)strData.c_str();
+		if (length == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！");
+			CClientController::getInstance()->DownloadEnd();
+			return; //跳出do的循环，进入外面的关闭连接
+		}
+	}
+	else if (length > 0 && (index >= length)) { //不是第一册接收(length > 0)且接收到的长度超过文件长度
+		fclose(pFile);
+		length = 0;
+		index = 0;
+		CClientController::getInstance()->DownloadEnd();
+	}
+	else { //接收的中途
+		fwrite(strData.c_str(), 1, strData.size(), pFile);
+		index += strData.size();
+		TRACE("index = %d\r\n", index);  //2.这里的index没有出现过index = 0的情况，且和上面的index的值不同！
+		//if (index >= length) { //加一个结束操作，因为可能在这个分支文件就已经写完了 ps：之后测试发现这里似乎不用加
+		//	fclose((FILE*)lParam);
+		//	length = 0;
+		//	index = 0;
+		//	CClientController::getInstance()->DownloadEnd();
+		//}
+		/*
+		fwrite: 1: element size，一次写入的字节数; head.strData.size() 次数
+		如当每次写4k字节，当写最后一个4k时候空间不够了，写了399k后事变，会返回99，表示成功写了99次
+		*/
+	}
 }
 
 void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
@@ -446,133 +572,18 @@ LRESULT CRemoteClientDlg::OnSendPakcetAck(WPARAM wParam, LPARAM lParam)
 {
 	if (lParam == -1 || (lParam == -2)) {
 		//TODO: 错误处理
+		TRACE("socket is error %d\r\n", lParam);
 	}
 	else if (lParam == 1) {
 		//对方关闭了套接字
+		TRACE("socket is closed!\r\n");
 	}
 	else {
-
-
 		CPacket head = *(CPacket*)wParam;
-		
 		
 		if (wParam != NULL) {
 			delete (CPacket*)wParam;
-			switch (head.sCmd) {
-
-			case 1: //获取驱动信息
-			{
-
-				std::string drivers = head.strData;
-				CString dr;
-
-				// 删除树控件中的所有项
-				m_Tree.DeleteAllItems();
-
-				// 循环遍历字符串
-				for (size_t i = 0; i < drivers.size(); ++i) {
-					// 如果遇到逗号，将当前子字符串插入树控件并清空临时字符串
-					if (drivers[i] == ',') {
-						dr += ":"; //windows磁盘的标号
-						//dr += CString(drivers.substr(drivers.size() - dr.GetLength()).c_str());
-						//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
-						HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
-						m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
-						//m_Tree.InsertItem(dr, TVI_ROOT, TVI_LAST);
-						dr.Empty();
-						continue;
-					}
-					// 将字符添加到临时字符串中
-					dr += drivers[i];
-				}
-
-				//插入最后一个子字符串
-				if (!dr.IsEmpty()) {
-					dr += ":"; //windows磁盘的标号
-					HTREEITEM hTmp = m_Tree.InsertItem(CString(dr), TVI_ROOT, TVI_LAST);
-					m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
-				}
-				break;
-			}
-				
-			case 2: //获取文件信息
-			{
-				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();
-				TRACE("hasnext: %d, isDirectory %d \r\n", pInfo->HasNext, pInfo->IsDirectory, pInfo->szFileName);
-				if (pInfo->HasNext == FALSE) break;
-				if (pInfo->IsDirectory) {
-					if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
-						break;
-					}
-					//hTreeSelected应该再remoteDLg中阻塞地拿到，如果要两个线程发消息得到的话可能有问题
-					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);
-					m_Tree.InsertItem("", hTemp, TVI_LAST); //插入内容，parent，查到上一个的后面
-					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND); //展开节点 这里需要自己展开 为什么以前不需要自己展开
-				}
-				else {
-					//是文件的情况
-					/*m_List.InsertItem(0, pInfo->szFileName);*/
-					m_List.InsertItem(m_List.GetItemCount(), pInfo->szFileName);
-					m_List.UpdateWindow();
-					TRACE("文件名：%s", pInfo->szFileName);
-					//2个原因导致问题：服务端传送的太快；客户端的m_List的属性只有是small icon才能正常显示所有文件
-				}
-				break;
-			}
-				
-			case 3: //运行文件
-				TRACE("run file done!\r\n");
-				break;
-			case 4:
-			{
-				static LONGLONG length = 0; //length: 文件的长度； index：一共收到多少字节
-				static LONGLONG index = 0;
-				TRACE("length %d, index %d", length, index);
-				TRACE("length is %d\r\n", length); //1.出现过length正常，index一直是0的情况：当单独打印的时候index正常，这是怎么回事
-				TRACE("index is %d\r\n", index);
-				if (length == 0) { //刚刚开始接收
-					length = *(long long*)head.strData.c_str();
-					if (length == 0) {
-						AfxMessageBox("文件长度为零或者无法读取文件！！");
-						CClientController::getInstance()->DownloadEnd();
-						break; //跳出do的循环，进入外面的关闭连接
-					}
-				}
-				else if (length > 0 && (index >= length)) { //不是第一册接收(length > 0)且接收到的长度超过文件长度
-					fclose((FILE*)lParam);
-					length = 0;
-					index = 0;
-					CClientController::getInstance()->DownloadEnd();
-				}
-				else { //接收的中途
-					FILE* pFile = (FILE*)lParam;
-					fwrite(head.strData.c_str(),1, head.strData.size(), pFile);
-					index += head.strData.size();
-					TRACE("index = %d\r\n", index);  //2.这里的index没有出现过index = 0的情况，且和上面的index的值不同！
-					//if (index >= length) { //加一个结束操作，因为可能在这个分支文件就已经写完了 ps：之后测试发现这里似乎不用加
-					//	fclose((FILE*)lParam);
-					//	length = 0;
-					//	index = 0;
-					//	CClientController::getInstance()->DownloadEnd();
-					//}
-					/*
-					fwrite: 1: element size，一次写入的字节数; head.strData.size() 次数
-					如当每次写4k字节，当写最后一个4k时候空间不够了，写了399k后事变，会返回99，表示成功写了99次
-					*/
-				}
-				
-			}
-			break;
-			case 9: //删除文件 不需要对响应进行处理
-				TRACE("delete file done!\r\n");
-				break;
-			case 1981:
-				TRACE("test connected success!\r\n");
-				break;
-			default:
-				TRACE("unknow data received!\r\n", head.sCmd);
-				break;
-			}
+			DealCommand(head.sCmd, head.strData, lParam);
 		}
 	}
 	return 0;

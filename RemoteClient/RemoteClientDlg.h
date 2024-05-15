@@ -29,7 +29,12 @@ public:
 	void DeleteTreeChildrenItem(HTREEITEM hTree);
 	CString GetPath(HTREEITEM hTree);
 
+	void DealCommand(WORD nCmd, const std::string& strDatad, LPARAM lParam);
+	void InitUIData();
 	void LoadFileCurrent();
+	void Str2Tree(const std::string& driver, CTreeCtrl& tree);
+	void UpdateFileInfo(const FILEINFO& finfo, HTREEITEM hParent);
+	void UpdateDownLoadFile(const std::string& strData, FILE* pFile);
 	//static void threadEntryForDownLoadFile(void* arg);
 	//static void threadEntryForWatchData(void* arg); //静态函数作为框架，写线程相关的启动，结束等但是不能访问this
 	//void threadDownFile();

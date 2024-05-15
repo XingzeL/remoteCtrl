@@ -23,7 +23,7 @@ public:
 	int Invoke(CWnd*& pMainWnd); //启动
 	int InitController();
 	//发送消息
-	LRESULT SendMessage(MSG msg);
+	//LRESULT SendMessage(MSG msg);
 	void UpdataAddress(int nIP, int nPort) {
 		CClientSocket* pClient = CClientSocket::getInstance();
 		pClient->UpdateAddress(nIP, nPort); //调用M层更新连接数据
@@ -70,12 +70,11 @@ public:
 protected:
 	void threadWatchScreen();
 	static void threadWatchScreenEntry(void *arg);
-	void threadDownloadFile();
+
 	//static unsigned __stdcall threadDownloadEntry(void* arg) {}
-	static void threadDownloadEntry(void* arg);
+
 
 	CClientController():m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) { //设置了一些对象的父对象
-		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
 		m_nThreadID = -1;
