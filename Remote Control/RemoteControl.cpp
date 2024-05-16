@@ -95,9 +95,61 @@ void ChooseAutoInvoke() {
     }
 }
 
+void ShowError()
+{
+    LPWSTR lpMessageBuf = NULL;
+    //strerror(errno); //标准C库的错误
+    //应对非标准库的错误：
+    FormatMessage(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+        NULL, GetLastError(),
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPWSTR)&lpMessageBuf, 0, NULL
+    );
+    OutputDebugString(lpMessageBuf);
+    LocalFree(lpMessageBuf); //释放系统分配的内存
+}
+
+bool IsAdmin() {
+    HANDLE hToken = NULL; 
+    //handle是一个void指针，一部分属于用户层，一部分属于os，用户的handle屏蔽掉了数据的结构
+    //启发：如果想和第三方合作，使用功能时要用句柄来调用接口，保证自己的技术细节
+    //Q:如何实现用handle调用对象
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+    {
+        //错误及处理
+        ShowError();
+        return false;
+    }
+    //拿到了token，进行判断
+    TOKEN_ELEVATION eve;
+    DWORD len = 0;
+    if (GetTokenInformation(hToken, TokenElevation, &eve, sizeof(eve), &len) == FALSE) {
+        ShowError();
+        return false;
+    }
+    return eve.TokenIsElevated;
+    if (len == sizeof(eve)) {
+        //查看是否已经成功提权
+        CloseHandle(hToken);
+
+    }
+    else {
+        //有其他的值，显示以下
+        printf("length of tokeninfomation is %d\r\n", len);
+        return false;
+    }
+}
+
 int main() {
+    if (IsAdmin()) {
+        printf("current is run as administrator!\r\n");
+    } //是否提权
+    else {
+        printf("current is run as normal user!\r\n");
+    }
     int nRetCode = 0;
-    ChooseAutoInvoke();
+    //ChooseAutoInvoke(); //使用启动项进行的开机启动
     HMODULE hModule = ::GetModuleHandle(nullptr);
 
     if (hModule != nullptr) {
