@@ -6,6 +6,7 @@
 #include <chrono>
 #include "utils.h"
 #include "Command.h"
+#include <conio.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -51,9 +52,115 @@ bool ChooseAutoInvoke(const CString& strPath) {
     return true;
 }
 
+#define IOCP_LIST_PUSH 1
+#define IOCP_LIST_POP 2
+#define IOCP_LIST_EMPTY 0
+
+enum {
+    IocpListEmpty,
+    IocpListPush,
+    IocpListPop
+};
+
+typedef struct IocpParam {
+    int nOperator; //操作码
+    std::string strData; //数据
+    _beginthread_proc_type cbFunc; //从beginthread参数里拿的类型
+    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+        nOperator = op;
+        strData = sData;
+        cbFunc = cb;
+    }
+    IocpParam() {
+        nOperator = -1;
+    }
+}IOCP_PARAM;
+
+void threadQueueEntry(HANDLE hIOCP)
+{
+    std::list<std::string> lstString; //字符串的list用来写入和提取
+    DWORD dwTransferred = 0; //拿到了多少字节
+    ULONG_PTR CompletionKey = 0; //拿到的数据
+    OVERLAPPED* pOverlapped = NULL;
+    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE))
+    {
+        if ((dwTransferred == 0) || (CompletionKey == NULL)) {
+            printf("thread is prepare to exit!\r\n");
+            break;
+        }
+        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
+        if (pParam->nOperator == IocpListPush) {
+            lstString.push_back(pParam->strData);
+        }
+        else if (pParam->nOperator == IocpListPop) {
+            std::string* pStr = NULL;
+            if (lstString.size() > 0) {
+                std::string* pStr = new std::string(lstString.front());
+                lstString.pop_front();
+            }
+            if (pParam->cbFunc) {
+                pParam->cbFunc(pStr);
+            }
+
+        }
+        else if (pParam->nOperator == IocpListEmpty) {
+            lstString.clear();
+        }
+        delete pParam;
+    }
+    _endthread();
+}
+
+void func(void* arg) {
+    //回调：打印以下传来的消息
+    std::string* pstr = (std::string*)arg;
+    if (pstr != NULL) {
+        printf("pop from list:%s\r\n", arg);
+        delete pstr;
+    }
+    else {
+        printf("list is empty, no data!\r\n");
+    }
+}
 
 int main() {
-    if (Cutils::IsAdmin()) {
+    if (!Cutils::Init()) return 1;
+    HANDLE hIOCP = INVALID_HANDLE_VALUE; // IO Completion Port: IO完成端口
+    hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1); //最后一个参数：只允许一个线程去访问
+    //和epoll不同：epoll是单线程的处理，IOCP可以允许多个线程访问完成端口
+    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP); //将iocp丢到一个线程中，线程中就获取iocp的状态
+    printf("press any key  to exit ...  \r\n");
+    
+    ULONGLONG tick = GetTickCount64();
+    while (_kbhit() != 0) //设计理念：请求和实现分离了
+    {
+        if (GetTickCount64() - tick > 1300) {
+            //激活IOCP并且传给他一个消息,给队列添加一个元素
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL); //用post来激活IOCP
+            tick = GetTickCount64();
+        }
+
+        if (GetTickCount64() - tick > 2000) {
+            //激活IOCP并且传给他一个消息
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world"), NULL); //用post来激活IOCP
+            tick = GetTickCount64();
+        }
+        Sleep(1); //防止CPU卡死
+    }
+
+    if (hIOCP != NULL) {
+        //TODO: 通知完成端口，保证线程结束
+        PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL); //用post来激活IOCP
+        WaitForSingleObject(hThread, INFINITE);
+    }
+    CloseHandle(hIOCP); //应该在所有线程结束之后再结束hIOCP
+    printf("exit done\r\n");
+    ::exit(0);
+    
+    //一个粗糙但是结构清晰的IOCP
+    
+    /*
+    *     if (Cutils::IsAdmin()) {
         if (!Cutils::Init()) return 1;
         OutputDebugString(L"current is run as administrator!\r\n");
 
@@ -84,6 +191,8 @@ int main() {
         }
         return 0;
     }
+    */
+
 
     return 0;
 }
