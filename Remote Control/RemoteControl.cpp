@@ -76,12 +76,12 @@ typedef struct IocpParam {
     }
 }IOCP_PARAM;
 
-void threadQueueEntry(HANDLE hIOCP)
-{
+void threadmain(HANDLE hIOCP) {
     std::list<std::string> lstString; //字符串的list用来写入和提取
     DWORD dwTransferred = 0; //拿到了多少字节
     ULONG_PTR CompletionKey = 0; //拿到的数据
     OVERLAPPED* pOverlapped = NULL;
+    int count = 0, count0 = 0;
     while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE))
     {
         if ((dwTransferred == 0) || (CompletionKey == NULL)) {
@@ -91,31 +91,43 @@ void threadQueueEntry(HANDLE hIOCP)
         IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
         if (pParam->nOperator == IocpListPush) {
             lstString.push_back(pParam->strData);
+            count++;
         }
         else if (pParam->nOperator == IocpListPop) {
-            std::string* pStr = NULL;
+            printf("%p  %d\r\n", pParam->cbFunc, lstString.size());
+            std::string* pstr = NULL;
             if (lstString.size() > 0) {
-                std::string* pStr = new std::string(lstString.front());
+                pstr = new std::string(lstString.front());
                 lstString.pop_front();
             }
             if (pParam->cbFunc) {
-                pParam->cbFunc(pStr);
-            }
+                pParam->cbFunc(pstr);
 
+            }
+            count0++;
         }
         else if (pParam->nOperator == IocpListEmpty) {
             lstString.clear();
         }
         delete pParam;
     }
-    _endthread();
+    printf("count %d count0 %d\r\n", count, count0);
+}
+
+void threadQueueEntry(HANDLE hIOCP) //线程函数
+{
+    threadmain(hIOCP);
+    _endthread(); //endthread()在线程业务的作用域之外，如果endthread和业务放在一起，
+    //因为线程的结束会直接终止上下文，会让局部对象来不及调用析构函数，造成内存泄漏。这种泄漏不是new造成的
+    //开线程函数的习惯：需要一个entry和一个thread的功能函数，在功能函数外调用endthread，这样保证内部的对象生命周期都结束
+    //总结：endthread()不要和局部对象处于同一个作用域
 }
 
 void func(void* arg) {
     //回调：打印以下传来的消息
     std::string* pstr = (std::string*)arg;
     if (pstr != NULL) {
-        printf("pop from list:%s\r\n", arg);
+        printf("pop from list:%s\r\n", pstr->c_str());
         delete pstr;
     }
     else {
@@ -127,23 +139,32 @@ int main() {
     if (!Cutils::Init()) return 1;
     HANDLE hIOCP = INVALID_HANDLE_VALUE; // IO Completion Port: IO完成端口
     hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1); //最后一个参数：只允许一个线程去访问
+    if (hIOCP == INVALID_HANDLE_VALUE || (hIOCP == NULL)) {
+        printf("create iocp failed!%d\r\n", GetLastError());
+        return 1;
+    }
+
     //和epoll不同：epoll是单线程的处理，IOCP可以允许多个线程访问完成端口
     HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP); //将iocp丢到一个线程中，线程中就获取iocp的状态
     printf("press any key  to exit ...  \r\n");
     
     ULONGLONG tick = GetTickCount64();
-    while (_kbhit() != 0) //设计理念：请求和实现分离了
+    ULONGLONG tick0 = GetTickCount64();
+    int count = 0, count0 = 0;
+    while (_kbhit() == 0) //设计理念：请求和实现分离了
     {
-        if (GetTickCount64() - tick > 1300) {
+        if (GetTickCount64() - tick0 > 1300) {
             //激活IOCP并且传给他一个消息,给队列添加一个元素
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL); //用post来激活IOCP
-            tick = GetTickCount64();
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world", func), NULL); //用post来激活IOCP
+            tick0 = GetTickCount64();
+            count0++;
         }
 
-        if (GetTickCount64() - tick > 2000) {
+        if (GetTickCount64() - tick > 1000) {
             //激活IOCP并且传给他一个消息
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world"), NULL); //用post来激活IOCP
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL); //用post来激活IOCP
             tick = GetTickCount64();
+            count++;
         }
         Sleep(1); //防止CPU卡死
     }
@@ -154,7 +175,7 @@ int main() {
         WaitForSingleObject(hThread, INFINITE);
     }
     CloseHandle(hIOCP); //应该在所有线程结束之后再结束hIOCP
-    printf("exit done\r\n");
+    printf("exit done! count %d; count0 %d\r\n", count, count0);
     ::exit(0);
     
     //一个粗糙但是结构清晰的IOCP
