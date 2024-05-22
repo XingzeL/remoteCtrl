@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "Command.h"
 #include <conio.h>
+#include "CSafeQueue.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -76,6 +77,9 @@ typedef struct IocpParam {
     }
 }IOCP_PARAM;
 
+//epoll是同步
+//iocp 的accept会给内核投递一个请求，来连接的时候，在get那里会得到响应
+//rtsp
 void threadmain(HANDLE hIOCP) {
     std::list<std::string> lstString; //字符串的list用来写入和提取
     DWORD dwTransferred = 0; //拿到了多少字节
@@ -135,47 +139,47 @@ void func(void* arg) {
     }
 }
 
-int main() {
-    if (!Cutils::Init()) return 1;
-    HANDLE hIOCP = INVALID_HANDLE_VALUE; // IO Completion Port: IO完成端口
-    hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1); //最后一个参数：只允许一个线程去访问
-    if (hIOCP == INVALID_HANDLE_VALUE || (hIOCP == NULL)) {
-        printf("create iocp failed!%d\r\n", GetLastError());
-        return 1;
-    }
-
-    //和epoll不同：epoll是单线程的处理，IOCP可以允许多个线程访问完成端口
-    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP); //将iocp丢到一个线程中，线程中就获取iocp的状态
+void test()
+{
     printf("press any key  to exit ...  \r\n");
-    
+    SafeQueue<std::string> lstStrings;
     ULONGLONG tick = GetTickCount64();
-    ULONGLONG tick0 = GetTickCount64();
+    ULONGLONG tick0 = GetTickCount64(), total = GetTickCount64();
     int count = 0, count0 = 0;
-    while (_kbhit() == 0) //设计理念：请求和实现分离了
+    while (GetTickCount64() - total <= 1000) //设计理念：请求和实现分离了
     {
-        if (GetTickCount64() - tick0 > 1300) {
+        if (GetTickCount64() - tick0 > 13) {
             //激活IOCP并且传给他一个消息,给队列添加一个元素
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world", func), NULL); //用post来激活IOCP
+            lstStrings.PushBack("hello world");
+
             tick0 = GetTickCount64();
             count0++;
         }
 
-        if (GetTickCount64() - tick > 1000) {
+        if (GetTickCount64() - tick > 20) {
             //激活IOCP并且传给他一个消息
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL); //用post来激活IOCP
+            std::string str;
+            lstStrings.PopFront(str);
             tick = GetTickCount64();
-            count++;
+            printf("pop from queue:%s\r\n", str.c_str());
         }
         Sleep(1); //防止CPU卡死
     }
 
-    if (hIOCP != NULL) {
-        //TODO: 通知完成端口，保证线程结束
-        PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL); //用post来激活IOCP
-        WaitForSingleObject(hThread, INFINITE);
+
+    printf("exit done! size %d\r\n", lstStrings.Size());
+    lstStrings.Clear();
+    printf("exit done! size %d\r\n", lstStrings.Size());
+}
+
+int main() {
+    if (!Cutils::Init()) return 1;
+    
+    for (int i = 0; i < 100; ++i) {
+        test();
     }
-    CloseHandle(hIOCP); //应该在所有线程结束之后再结束hIOCP
-    printf("exit done! count %d; count0 %d\r\n", count, count0);
+    
+
     ::exit(0);
     
     //一个粗糙但是结构清晰的IOCP
