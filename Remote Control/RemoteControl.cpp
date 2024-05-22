@@ -140,6 +140,7 @@ void func(void* arg) {
 }
 
 void test()
+//性能: 线程安全队列push性能高，pop性能只有1/4
 {
     printf("press any key  to exit ...  \r\n");
     SafeQueue<std::string> lstStrings;
