@@ -1,6 +1,10 @@
 #pragma once
 #include <atomic>
 #include <vector>
+#include <mutex>
+#include <Windows.h>
+#include "pch.h"
+
 class ThreadFuncBase {};
 typedef int (ThreadFuncBase::* FUNCTYPE)(); //这里定义FUNCTYPE
 
@@ -72,6 +76,11 @@ public:
 		m_worker.store(worker);
 	}
 
+	//true: 表示线程空闲  false:已经分配了工作
+	bool IsIdle() { 
+		return !m_worker.load().IsValid();
+	}
+
 private:
 	void ThreadWorker() {
 		while (m_bStatus) {
@@ -140,10 +149,30 @@ public:
 		}
 	}
 
+	//返回线程的index，如果是-1表示线程都在忙
 	int DispathchWorker(const ThreadWorker& worker) {
-		
+		//Worker要分配给谁
+		int index = -1;
+		m_lock.lock();
+		for (size_t i = 0; i < m_threads.size(); i++) {
+			if (m_threads[i].IsIdle()) {
+				m_threads[i].UpdateWorker(worker);
+				index = i;
+				break;
+			}
+		}
+		m_lock.unlock();
+		return index;
+	}
+
+	bool CheckThreadValid(int index) {
+		if (index < m_threads.size()) {
+			return m_threads[index].IsValid();
+		}
+		return false;
 	}
 
 private:
+	std::mutex m_lock;
 	std::vector<CThread> m_threads;
 };
