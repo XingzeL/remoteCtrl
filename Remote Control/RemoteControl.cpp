@@ -9,6 +9,7 @@
 #include <conio.h>
 #include "CSafeQueue.h"
 #include <MSWSock.h>
+#include "CServer.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -174,59 +175,10 @@ void test()
     printf("exit done! size %d\r\n", lstStrings.Size());
 }
 
-class COverlapped {
-public:
-    OVERLAPPED m_overlapped;
-    DWORD m_operator;
-    char m_buffer[4096];
-    COverlapped() {
-        m_operator = 0;
-        memset(&m_overlapped, 0, sizeof(m_overlapped));
-        memset(m_buffer, 0, sizeof(m_buffer));
-    }
-};
-
 void iocp() {
-    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0); //TCP
-    sock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-    //带了重叠结构之后都是非阻塞
-    if (sock == INVALID_SOCKET) {
-        Cutils::ShowError();
-        return;
-    }
-    HANDLE hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, sock, 4);
-    SOCKET client = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-    CreateIoCompletionPort((HANDLE)sock, hIOCP, 0, 0);
-    sockaddr_in addr;
-    addr.sin_family = PF_INET;
-    addr.sin_addr.s_addr = inet_addr("0.0.0.0"); 
-    addr.sin_port = htons(9527);
-    bind(sock, (sockaddr*)&addr, sizeof(addr));
-    listen(sock, 5);
-    COverlapped overlapped;
-    overlapped.m_operator = 1; //accept
-    memset(&overlapped, 0, sizeof(OVERLAPPED));
-    DWORD received = 0;
-
-    if (AcceptEx(sock, client, overlapped.m_buffer, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
-        &received, &overlapped.m_overlapped) == FALSE)
-    {
-        Cutils::ShowError();
-    }
-
-    //开启线程
-    while (true) {
-        LPOVERLAPPED pOverlapped = NULL;
-        DWORD transferred = 0;
-        DWORD key = 0;
-        if (GetQueuedCompletionStatus(hIOCP, &transferred, &key, &pOverlapped, INFINITY)) {
-            COverlapped* p0 = CONTAINING_RECORD(pOverlapped, COverlapped, m_overlapped);
-            switch (p0->m_operator) {
-            case 1:
-                //处理accept
-            }
-        }
-    }
+    CServer server;
+    server.StartServer();
+    getchar();
 }
 
 int main() {

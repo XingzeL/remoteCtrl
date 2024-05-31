@@ -77,6 +77,9 @@
     <ClCompile Include="CSafeQueue.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="CServer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Remote Control.rc">
