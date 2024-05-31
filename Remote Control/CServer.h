@@ -23,10 +23,19 @@ public:
     std::vector<char> m_buffer; //缓冲区
     ThreadWorker m_worker; //对应的处理函数
     CServer* m_server; //服务器对象
+    PCLIENT m_client; //对应的客户端
+    WSABUF m_wsabuffer;
 };
 
 template<EOperator> class AcceptOverlapped;
 typedef AcceptOverlapped<EAccept> ACCEPTOVERLAPPED;
+
+template<EOperator> class RecvOverlapped;
+typedef RecvOverlapped<ERecv> RECVOVERLAPPED;
+
+template<EOperator> class SendOverlapped;
+typedef SendOverlapped<ESend> SENDOVERLAPPED;
+
 
 class CClient {
 public:
@@ -46,19 +55,37 @@ public:
 
     operator LPDWORD();
 
-    sockaddr_in* GetLocalAddr() { return &m_laddr; }
-    sockaddr_in* GetRemoteAddr() { return &m_raddr;}
+    LPWSABUF RecvWSABuffer();
 
+    LPWSABUF SendWSABuffer();
+
+    sockaddr_in* GetLocalAddr() { return &m_laddr; }
+    sockaddr_in* GetRemoteAddr() { return &m_raddr; }
+    size_t GetBufferSize() const { return m_buffer.size(); }
+    DWORD& flags() { return m_flags; }
+
+    bool Recv() {
+        int ret = recv(m_sock, m_buffer.data(), m_buffer.size(), 0); //vector的.data()返回第一个元素的地址
+        if (ret <= 0) return -1;
+        m_used += (size_t)ret; //记录读取了多少字节
+        //TODO: 解析数据
+        return 0;
+    }
 
 private:
     SOCKET m_sock;
     DWORD m_received;
-    //ACCEPTOVERLAPPED m_overlapped; //这里声明了实体的AccepteOverlapped对象，而那个对象中有CClient对象，形成循环依赖
+    DWORD m_flags;
+
     std::shared_ptr<ACCEPTOVERLAPPED> m_overlapped;
+    std::shared_ptr<RECVOVERLAPPED> m_recv;
+    std::shared_ptr<SENDOVERLAPPED> m_send;
     std::vector<char> m_buffer;
+    size_t m_used; //已经使用的缓冲区的大小
     sockaddr_in m_laddr; //地址
     sockaddr_in m_raddr;
     bool m_isbusy;
+
 };
 
 
@@ -75,26 +102,26 @@ template<EOperator>
 class RecvOverlapped : public COverlapped, ThreadFuncBase
 {
 public:
-    RecvOverlapped() : m_operator(ERecv), m_worker(this, &RecvOverlapped::RecvWorker) {
-        memset(&m_overlapped, 0, sizeof(m_overlapped));
-        m_buffer.resize(1024 * 256);
-    }
-    int RecvWorker() { //Accept动作
+    RecvOverlapped();
 
+    int RecvWorker() { //Accept动作
+        int ret = m_client->Recv(); //数据并不能直接被overlapped传送，还在网卡的缓冲区中，要进行recv
+        return ret;
     }
 };
-typedef RecvOverlapped<ERecv> RECVOVERLAPPED;
+
 
 template<EOperator>
 class SendOverlapped : public COverlapped, ThreadFuncBase
 {
 public:
-    SendOverlapped() : m_operator(ESend), m_worker(this, &SendOverlapped::SendWorker) {
-        memset(&m_overlapped, 0, sizeof(m_overlapped));
-        m_buffer.resize(1024 * 256);
-    }
+    SendOverlapped();
+    //    : m_operator(ESend), m_worker(this, &SendOverlapped::SendWorker) {
+    //    memset(&m_overlapped, 0, sizeof(m_overlapped));
+    //    m_buffer.resize(1024 * 256);
+    //}
     int SendWorker() { //Send动作
-
+        return -1;
     }
 };
 typedef SendOverlapped<ESend> SENDOVERLAPPED;
@@ -108,14 +135,10 @@ public:
         m_buffer.resize(1024);
     }
     int ErrorWorker() { //Error动作
-
+        return -1;
     }
 };
 typedef ErrorOverlapped<EError> ERROROVERLAPPED;
-
-
-
-
 
 class CServer :
     public ThreadFuncBase
@@ -156,15 +179,14 @@ public:
         m_pool.DispathchWorker(ThreadWorker(this, (FUNCTYPE)&CServer::threadIocp));
         if (!NewAccept()) return false;
 
-        return false;
+        return true;
     }
 
     bool NewAccept() {
         PCLIENT pClient(new CClient());
         pClient->SetOverlapped(pClient);
         m_client.insert(std::pair<SOCKET, PCLIENT>(*pClient, pClient));
-        if (FALSE ==
-            AcceptEx(m_sock,
+        if (!AcceptEx(m_sock,
                 *pClient,
                 *pClient,
                 0,
@@ -188,49 +210,8 @@ private:
 
      }
 
+    int threadIocp();
 
-
-    int threadIocp() {
-        DWORD transferred = 0;
-        ULONG_PTR CompletionKey = 0;
-        OVERLAPPED* lpOverlapped = NULL;
-        if (GetQueuedCompletionStatus(m_hIOCP, &transferred, &CompletionKey, &lpOverlapped, INFINITY))
-        {
-            if (transferred > 0 && (CompletionKey != 0)) {
-                COverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, COverlapped, m_overlapped);
-                switch (pOverlapped->m_operator) {
-                case EAccept:
-                {
-                    ACCEPTOVERLAPPED* pOver = (ACCEPTOVERLAPPED*)pOverlapped;
-                    m_pool.DispathchWorker(pOver->m_worker);
-                }
-                break;
-                case ERecv:
-                {
-                    RECVOVERLAPPED* pOver = (RECVOVERLAPPED*)pOverlapped;
-                    m_pool.DispathchWorker(pOver->m_worker);
-                }
-                    break;
-                case ESend:
-                {
-                    SENDOVERLAPPED* pOver = (SENDOVERLAPPED*)pOverlapped;
-                    m_pool.DispathchWorker(pOver->m_worker);
-                }
-                    break;
-                case EError:
-                {
-                    ERROROVERLAPPED* pOver = (ERROROVERLAPPED*)pOverlapped;
-                    m_pool.DispathchWorker(pOver->m_worker);
-                }
-                    break;
-                }
-            }
-            else {
-                return -1;
-            }
-        }
-        return 0;
-    }
 public:
     CThreadPool m_pool; //线程池
     HANDLE m_hIOCP; //完成端口
