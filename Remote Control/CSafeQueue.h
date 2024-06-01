@@ -2,6 +2,7 @@
 #include "pch.h"
 #include <atomic>
 #include <list>
+#include "CThread.h"
 
 template<class T>
 class SafeQueue
@@ -74,7 +75,7 @@ public:
 		return ret;
 	}
 
-	bool PopFront(T& data) {
+	virtual bool PopFront(T& data) {
 		//想要取值到data
 		//往里面发送数据
 		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -92,7 +93,7 @@ public:
 		ret = WaitForSingleObject(hEvent, INFINITE) == WAIT_OBJECT_0; //等待写完
 		//push不需要wait，只用post成功，iocp一定会那到。这样保证了效率
 		if (ret) {
-			data = Param.strData;
+			//data = Param.strData;
 		}
 		return ret;
 	}
@@ -129,14 +130,14 @@ public:
 		if (ret == false) delete pParam; //即便m_lock在判断之后又变成false了，前面的post会失败，在这里释放掉内存防止泄漏
 		return ret;
 	}
-private:
+protected:
 	static void threadEntry(void* arg) {
 		SafeQueue<T>* thiz = (SafeQueue<T>*)arg;
 		thiz->threadMain();
 		_endthread();
 	}
 
-	void DealParam(PPARAM* pParam) {
+	virtual void DealParam(PPARAM* pParam) {
 		switch (pParam->nOperator) {
 		case SQPush:
 		{
@@ -175,12 +176,14 @@ private:
 		break;
 
 		default:
+		{
 			OutputDebugStringA("unknown operator!\r\n");
 			break;
 		}
+		}
 	}
 
-	void threadMain()
+	virtual void threadMain()
 	{
 		DWORD dwTransferred = 0;
 		PPARAM* pParam = NULL;
@@ -199,7 +202,7 @@ private:
 			}
 			pParam = (PPARAM*)CompletionKey; //另一边传来的数据
 			DealParam(pParam);
-			
+
 		}
 		//防御性：看看队列里还有没有
 		while (GetQueuedCompletionStatus(
@@ -216,13 +219,108 @@ private:
 			DealParam(pParam);
 		}
 		HANDLE hTemp = m_hCompletionPort;
-		m_hCompletionPort = NULL; 
+		m_hCompletionPort = NULL;
 		CloseHandle(hTemp);
 	}
-private:
-	std::list<T> m_lstData;
+
+
+protected:
+	
 	HANDLE m_hCompletionPort; //iocp端口
 	HANDLE m_hThread;
+	std::list<T> m_lstData;
 	std::atomic<bool> m_lock; //队列正在析构中
 };
 
+
+
+template<class T>
+class SendQueue
+	: public SafeQueue<T> , public ThreadFuncBase{
+public:
+	typedef int (ThreadFuncBase::* ECALLBACK)(T& data);
+	SendQueue(ThreadFuncBase* obj, ECALLBACK callback)
+		:SafeQueue<T>(), m_base(obj), m_callback(callback) {
+		m_thread.Start();
+		m_thread.UpdateWorker(::ThreadWorker(this, (FUNCTYPE) & SendQueue<T>::threadTick));
+	}
+	
+
+protected:
+	virtual bool PopFront(T& data) { return false; };
+
+	virtual bool PopFront() {
+		typename SafeQueue<T>::IocpParam* Param = new typename SafeQueue<T>::IocpParam(SafeQueue<T>::SQPop, T());
+		if (SafeQueue<T>::m_lock) {
+			delete Param;
+			return false;
+		}
+		bool ret = PostQueuedCompletionStatus(SafeQueue<T>::m_hCompletionPort, sizeof(*Param), (ULONG_PTR)&Param, NULL);
+		if (ret == false) {
+			delete Param;
+			return false;
+		}
+		return ret;
+	}
+
+	int threadTick() { //用于不断激活下一个pop处理
+		if (SafeQueue<T>::m_lstData.size() > 0) {
+			PopFront();
+		}
+		Sleep(1);
+		return 0;
+	}
+
+	virtual void DealParam(typename SafeQueue<T>::PPARAM* pParam) {
+		switch (pParam->nOperator) {
+		case SafeQueue<T>::SQPush:
+		{
+			SafeQueue<T>::m_lstData.push_back(pParam->strData);
+			delete pParam; //push操作发完就走，不等待，使用的堆上内存，需要操作完成后删除
+		}
+		break;
+
+		case SafeQueue<T>::SQPop:
+		{
+			if (SafeQueue<T>::m_lstData.size() > 0) {
+				pParam->strData = SafeQueue<T>::m_lstData.front(); //pop操作是同步的，传来的是栈上变量且对方在用hEvent等待，不用delete
+				if ((m_base->*m_callback)(pParam->strData) == 0) {
+					//此处callback传递data的引用，callback中直接剪切data，没剪切完就返回1
+					SafeQueue<T>::m_lstData.pop_front();
+				}
+			}
+			delete pParam;
+		}
+		break;
+
+		case SafeQueue<T>::SQSize:
+		{
+			pParam->nOperator = SafeQueue<T>::m_lstData.size(); //以operator为载体传回信息
+			if (pParam->hEvent != NULL) {
+				SetEvent(pParam->hEvent);
+			}
+		}
+		break;
+
+		case SafeQueue<T>::SQClear:
+		{
+			SafeQueue<T>::m_lstData.clear();
+			delete pParam;
+		}
+		break;
+
+		default:
+			OutputDebugStringA("unknown operator!\r\n");
+			break;
+		}
+	}
+
+
+private:
+	ThreadFuncBase* m_base;
+	ECALLBACK m_callback;
+	CThread m_thread;
+};
+
+typedef SendQueue<std::vector<char>>::ECALLBACK SENDCALLBACK; 
+//ECALLBACK: 是参数为T& data的ThreadFuncBase

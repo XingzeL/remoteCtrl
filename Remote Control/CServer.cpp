@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "CServer.h"
+#include "utils.h"
 #pragma warning(disable:4407)
 
 template<EOperator op>
@@ -15,11 +16,17 @@ template<EOperator op>
 int AcceptOverlapped<op>::AcceptWorker() { //Accept动作，执行一次
     INT lLength = 0, rLength = 0;
     if (*(LPDWORD)*m_client.get() > 0) {
+        sockaddr* ploal = NULL, * promote = NULL;
         GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16,
             sizeof(sockaddr_in) + 16,
             (sockaddr**)m_client->GetLocalAddr(), &lLength,//本地地址,设置了m_client的地址
             (sockaddr**)m_client->GetRemoteAddr() ,&rLength//远程地址
+
+
         );
+        memcpy(m_client->GetLocalAddr(), ploal, sizeof(sockaddr_in));
+        memcpy(m_client->GetRemoteAddr(), promote, sizeof(sockaddr_in));
+        m_server->BindSocket(*m_client);
 
         int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1,
             *m_client, &m_client->flags(), *m_client, NULL);
@@ -43,6 +50,7 @@ CClient::CClient()
     m_overlapped(new ACCEPTOVERLAPPED()),
     m_recv(new RECVOVERLAPPED()),
     m_send(new SENDOVERLAPPED())
+    //m_vecSend(this, (SENDCALLBACK)&CClient::SendData)
 {
     m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
     m_buffer.resize(1024);
@@ -82,6 +90,38 @@ LPWSABUF CClient::SendWSABuffer()
 {
     return &m_send->m_wsabuffer;
 }
+
+bool CClient::Recv() {
+    int ret = recv(m_sock, m_buffer.data(), m_buffer.size(), 0); //vector的.data()返回第一个元素的地址
+    if (ret <= 0) return false;
+    m_used += (size_t)ret; //记录读取了多少字节
+    //TODO: 解析数据
+    return true;
+}
+
+int CClient::Send(void* buffer, size_t nSize) {
+    std::vector<char> data(nSize);
+    memcpy(data.data(), buffer, nSize);
+    //if (m_vecSend.PushBack(data)) { //第一版：Pop的操作在SendQueue中的threadtick中定时pop
+    //    return 0;
+    //}
+    return -1;
+}
+
+int CClient::SendData(std::vector<char>& data)
+{
+   /* if (m_vecSend.Size() > 0) {
+        int ret = WSASend(m_sock, SendWSABuffer(), 1, &m_received, m_flags, &m_send->m_overlapped, NULL);
+        if (ret != 0 && (WSAGetLastError() != WSA_IO_PENDING)) {
+            Cutils::ShowError();
+            return -1;
+        }
+    }*/
+    return 0;
+}
+
+
+
 
 int CServer::threadIocp()
 {

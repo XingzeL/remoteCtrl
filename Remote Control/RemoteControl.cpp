@@ -144,35 +144,35 @@ void func(void* arg) {
 void test()
 //性能: 线程安全队列push性能高，pop性能只有1/4
 {
-    printf("press any key  to exit ...  \r\n");
-    SafeQueue<std::string> lstStrings;
-    ULONGLONG tick = GetTickCount64();
-    ULONGLONG tick0 = GetTickCount64(), total = GetTickCount64();
-    int count = 0, count0 = 0;
-    while (GetTickCount64() - total <= 1000) //设计理念：请求和实现分离了
-    {
-        if (GetTickCount64() - tick0 > 13) {
-            //激活IOCP并且传给他一个消息,给队列添加一个元素
-            lstStrings.PushBack("hello world");
+    //printf("press any key  to exit ...  \r\n");
+    //SafeQueue<std::string> lstStrings;
+    //ULONGLONG tick = GetTickCount64();
+    //ULONGLONG tick0 = GetTickCount64(), total = GetTickCount64();
+    //int count = 0, count0 = 0;
+    //while (GetTickCount64() - total <= 1000) //设计理念：请求和实现分离了
+    //{
+    //    if (GetTickCount64() - tick0 > 13) {
+    //        //激活IOCP并且传给他一个消息,给队列添加一个元素
+    //        lstStrings.PushBack("hello world");
 
-            tick0 = GetTickCount64();
-            count0++;
-        }
+    //        tick0 = GetTickCount64();
+    //        count0++;
+    //    }
 
-        if (GetTickCount64() - tick > 20) {
-            //激活IOCP并且传给他一个消息
-            std::string str;
-            lstStrings.PopFront(str);
-            tick = GetTickCount64();
-            printf("pop from queue:%s\r\n", str.c_str());
-        }
-        Sleep(1); //防止CPU卡死
-    }
+    //    if (GetTickCount64() - tick > 20) {
+    //        //激活IOCP并且传给他一个消息
+    //        std::string str;
+    //        lstStrings.PopFront(str);
+    //        tick = GetTickCount64();
+    //        printf("pop from queue:%s\r\n", str.c_str());
+    //    }
+    //    Sleep(1); //防止CPU卡死
+    //}
 
 
-    printf("exit done! size %d\r\n", lstStrings.Size());
+    /*printf("exit done! size %d\r\n", lstStrings.Size());
     lstStrings.Clear();
-    printf("exit done! size %d\r\n", lstStrings.Size());
+    printf("exit done! size %d\r\n", lstStrings.Size());*/
 }
 
 void iocp() {
@@ -184,11 +184,12 @@ void iocp() {
 int main() {
     if (!Cutils::Init()) return 1;
     
-    for (int i = 0; i < 100; ++i) {
+    /*for (int i = 0; i < 100; ++i) {
         test();
-    }
+    }*/
     
-
+    iocp();
+    getchar();
     ::exit(0); //推送
     
     //一个粗糙但是结构清晰的IOCP

@@ -1,9 +1,11 @@
 #pragma once
+#include "pch.h"
+#include <Windows.h>
 #include <atomic>
 #include <vector>
 #include <mutex>
-#include <Windows.h>
-#include "pch.h"
+
+
 
 class ThreadFuncBase {};
 typedef int (ThreadFuncBase::* FUNCTYPE)(); //这里定义FUNCTYPE
@@ -36,8 +38,7 @@ public:
 	bool IsValid() const {
 		return (thiz != NULL) && (func != NULL);
 	}
-
-private:
+	
 	ThreadFuncBase* thiz;
 	FUNCTYPE func;
 };
@@ -47,6 +48,7 @@ class CThread
 public:
 	CThread() {
 		m_hThread = NULL;
+		m_bStatus = false;
 	}
 
 	~CThread() {
@@ -72,34 +74,45 @@ public:
 
 		if (m_bStatus == false) return true;
 		m_bStatus = false;
-		bool ret = WaitForSingleObject(m_hThread, INFINITE) == WAIT_OBJECT_0; 
+		DWORD ret = WaitForSingleObject(m_hThread, 1000);
+		if (ret == WAIT_TIMEOUT) {
+			TerminateThread(m_hThread, -1);
+		}
 		UpdateWorker();
 		return ret;
 	}
 	
 	bool UpdateWorker(const ::ThreadWorker& worker = ::ThreadWorker()) {
+		if (m_worker.load() != NULL && (m_worker.load() != &worker)) {
+			::ThreadWorker* pWorker = m_worker.load();
+			TRACE("delete pWorker = %08X m_worker = %08X\r\n", pWorker, m_worker.load());
+			m_worker.store(NULL);
+			delete pWorker;
+		}
+		if (m_worker.load() == &worker) return false;
 		if (!worker.IsValid()) {
 			m_worker.store(NULL);
 			return false;
 		}
-		if (m_worker.load() != NULL) {
-			::ThreadWorker* pWorker = m_worker.load();
-			m_worker.store(NULL);
-			delete pWorker;
-			return false;
-		}
+		::ThreadWorker* pWorker = new ::ThreadWorker(worker);
+		TRACE("new pWorker = %08X m_worker = %08X\r\n", pWorker, m_worker.load());
 		m_worker.store(new ::ThreadWorker);
 		return true;
 	}
 
 	//true: 表示线程空闲  false:已经分配了工作
 	bool IsIdle() { 
+		if (m_worker.load() == NULL) return true;
 		return !m_worker.load()->IsValid();
 	}
 
 private:
 	void ThreadWorker() {
 		while (m_bStatus) {
+			if (m_worker.load() == NULL) {
+				Sleep(1);
+				continue;
+			}
 			::ThreadWorker worker = *m_worker.load();
 			if (worker.IsValid()) {
 				int ret = worker();
@@ -109,7 +122,9 @@ private:
 					OutputDebugString(str);
 				}
 				if (ret < 0) {
+					::ThreadWorker* pWorker = m_worker.load();
 					m_worker.store(NULL);//重新初始化一个默认worker
+					delete pWorker;
 				}
 			}
 			else {
@@ -145,8 +160,13 @@ public:
 	CThreadPool() {}
 	~CThreadPool() {
 		Stop();
+		for (size_t i = 0; i < m_threads.size(); i++) {
+			delete m_threads[i];
+			m_threads[i] = NULL;
+		}
 		m_threads.clear();
 	}
+
 	bool Invoke() {
 		bool ret = true;
 		for (size_t i = 0; i < m_threads.size(); ++i) {
