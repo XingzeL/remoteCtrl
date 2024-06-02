@@ -96,7 +96,7 @@ public:
 		}
 		::ThreadWorker* pWorker = new ::ThreadWorker(worker);
 		TRACE("new pWorker = %08X m_worker = %08X\r\n", pWorker, m_worker.load());
-		m_worker.store(new ::ThreadWorker);
+		m_worker.store(new ::ThreadWorker(worker));
 		return true;
 	}
 
@@ -115,17 +115,20 @@ private:
 			}
 			::ThreadWorker worker = *m_worker.load();
 			if (worker.IsValid()) {
-				int ret = worker();
-				if (ret != 0) {
-					CString str;
-					str.Format(_T("thread found warning code %d\r\n"), ret);
-					OutputDebugString(str);
+				if (WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT) {
+					int ret = worker();
+					if (ret != 0) {
+						CString str;
+						str.Format(_T("thread found warning code %d\r\n"), ret);
+						OutputDebugString(str);
+					}
+					if (ret < 0) {
+						::ThreadWorker* pWorker = m_worker.load();
+						m_worker.store(NULL);//重新初始化一个默认worker
+						delete pWorker;
+					}
 				}
-				if (ret < 0) {
-					::ThreadWorker* pWorker = m_worker.load();
-					m_worker.store(NULL);//重新初始化一个默认worker
-					delete pWorker;
-				}
+
 			}
 			else {
 				Sleep(1); //空挡

@@ -15,7 +15,7 @@ AcceptOverlapped<op>::AcceptOverlapped() {
 template<EOperator op>
 int AcceptOverlapped<op>::AcceptWorker() { //Accept动作，执行一次
     INT lLength = 0, rLength = 0;
-    if (*(LPDWORD)*m_client.get() > 0) {
+    if (*(LPDWORD)*m_client > 0) {
         sockaddr* ploal = NULL, * promote = NULL;
         GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16,
             sizeof(sockaddr_in) + 16,
@@ -59,7 +59,7 @@ CClient::CClient()
 }
 
 
-void CClient::SetOverlapped(PCLIENT& ptr) {
+void CClient::SetOverlapped(CClient* ptr) {
     m_overlapped->m_client = ptr;
     m_recv->m_client = ptr;
     m_send->m_client = ptr;
@@ -89,6 +89,11 @@ LPWSABUF CClient::RecvWSABuffer()
 LPWSABUF CClient::SendWSABuffer()
 {
     return &m_send->m_wsabuffer;
+}
+
+LPWSAOVERLAPPED CClient::SendOverlapped()
+{
+    return &m_send->m_overlapped;
 }
 
 bool CClient::Recv() {
@@ -123,15 +128,78 @@ int CClient::SendData(std::vector<char>& data)
 
 
 
+bool CServer::StartServer() {
+    CreateSocket();
+    if (bind(m_sock, (sockaddr*)&m_addr, sizeof(m_addr)) == -1) {
+        closesocket(m_sock);
+        m_sock = INVALID_SOCKET;
+        return false;
+    }
+    if (listen(m_sock, 5) == -1) {
+        closesocket(m_sock);
+        m_sock = INVALID_SOCKET;
+        return false;
+    }
+    m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 4); //创建一个iocp
+    if (m_hIOCP == NULL) {
+        closesocket(m_sock);
+        m_sock = INVALID_SOCKET;
+        m_hIOCP = INVALID_HANDLE_VALUE;
+        return false;
+    }
+    CreateIoCompletionPort((HANDLE)m_sock, m_hIOCP, (ULONG_PTR)this, 0); //绑定socket和iocp
+    m_pool.Invoke(); //启动线程池
+    m_pool.DispathchWorker(ThreadWorker(this, (FUNCTYPE)&CServer::threadIocp));
+    if (!NewAccept()) return false; //发送给iocp一个accept请求， 完成后在threadIocp中得到通知
+
+    return true;
+}
+
+bool CServer::NewAccept() {
+    CClient* pClient = new CClient(); //创建的client
+    pClient->SetOverlapped(pClient);
+    //m_client.insert(std::pair<SOCKET, PCLIENT>(*pClient, pClient));
+    if (!AcceptEx(m_sock,
+        *pClient,
+        *pClient,
+        0,
+        sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
+        *pClient,
+        *pClient))
+    {
+        TRACE("%d\r\n", WSAGetLastError());
+        if (WSAGetLastError() != WSA_IO_PENDING) {
+            closesocket(m_sock);
+            m_sock = INVALID_SOCKET;
+            m_hIOCP = INVALID_HANDLE_VALUE;
+            return false;
+        }
+
+    }
+    return true;
+}
+
+void CServer::CreateSocket() {
+    WSADATA WSAData;
+    WSAStartup(MAKEWORD(2, 2), &WSAData);
+    m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+    int opt = 1;
+    setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+
+}
+
 int CServer::threadIocp()
 {
     DWORD transferred = 0;
     ULONG_PTR CompletionKey = 0;
     OVERLAPPED* lpOverlapped = NULL;
+    TRACE("into ThreadIocp\r\n");
     if (GetQueuedCompletionStatus(m_hIOCP, &transferred, &CompletionKey, &lpOverlapped, INFINITY))
     {
         if (transferred > 0 && (CompletionKey != 0)) {
             COverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, COverlapped, m_overlapped);
+            TRACE("pOverlapped->m_operator %d \r\n", pOverlapped->m_operator);
+            pOverlapped->m_server = this;
             switch (pOverlapped->m_operator) {
             case EAccept:
             {
@@ -142,11 +210,14 @@ int CServer::threadIocp()
             case ERecv:
             {
                 RECVOVERLAPPED* pOver = (RECVOVERLAPPED*)pOverlapped;
+                WSABUF* buffer;
+                buffer = pOver->m_client->SendWSABuffer();
                 m_pool.DispathchWorker(pOver->m_worker);
             }
             break;
             case ESend:
             {
+                TRACE("Send\r\n");
                 SENDOVERLAPPED* pOver = (SENDOVERLAPPED*)pOverlapped;
                 m_pool.DispathchWorker(pOver->m_worker);
             }
