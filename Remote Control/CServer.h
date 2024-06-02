@@ -76,8 +76,9 @@ public:
     size_t GetBufferSize() const { return m_buffer.size(); }
     DWORD& flags() { return m_flags; }
     LPWSAOVERLAPPED SendOverlapped();
+    LPWSAOVERLAPPED RecvOverlapped();
 
-    bool Recv();
+    int Recv();
 
     int Send(void* buffer, size_t nSize);
     int SendData(std::vector<char>& data); //用于作为callback传给队列类

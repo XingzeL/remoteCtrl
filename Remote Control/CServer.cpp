@@ -15,21 +15,23 @@ AcceptOverlapped<op>::AcceptOverlapped() {
 template<EOperator op>
 int AcceptOverlapped<op>::AcceptWorker() { //Accept动作，执行一次
     INT lLength = 0, rLength = 0;
-    if (*(LPDWORD)*m_client > 0) {
-        sockaddr* ploal = NULL, * promote = NULL;
+    if (m_client->GetBufferSize() > 0) {
+        sockaddr* plocal = NULL, * promote = NULL;
         GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16,
             sizeof(sockaddr_in) + 16,
-            (sockaddr**)m_client->GetLocalAddr(), &lLength,//本地地址,设置了m_client的地址
-            (sockaddr**)m_client->GetRemoteAddr() ,&rLength//远程地址
+            (sockaddr**)&plocal, &lLength,//本地地址,设置了m_client的地址
+            (sockaddr**)&promote,&rLength//远程地址
 
 
         );
-        memcpy(m_client->GetLocalAddr(), ploal, sizeof(sockaddr_in));
+        memcpy(m_client->GetLocalAddr(), plocal, sizeof(sockaddr_in));
         memcpy(m_client->GetRemoteAddr(), promote, sizeof(sockaddr_in));
         m_server->BindSocket(*m_client);
 
+        //int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1,
+            //*m_client, &m_client->flags(), *m_client, NULL);
         int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1,
-            *m_client, &m_client->flags(), *m_client, NULL);
+            *m_client, &m_client->flags(), m_client->RecvOverlapped(), NULL);
 
         if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
             //排除WSA_IO_PENDING
@@ -96,12 +98,17 @@ LPWSAOVERLAPPED CClient::SendOverlapped()
     return &m_send->m_overlapped;
 }
 
-bool CClient::Recv() {
-    int ret = recv(m_sock, m_buffer.data(), m_buffer.size(), 0); //vector的.data()返回第一个元素的地址
-    if (ret <= 0) return false;
+LPWSAOVERLAPPED CClient::RecvOverlapped()
+{
+    return &m_recv->m_overlapped;
+}
+
+int CClient::Recv() {
+    int ret = recv(m_sock, m_buffer.data() + m_used, m_buffer.size() - m_used, 0); //vector的.data()返回第一个元素的地址
+    if (ret <= 0) return -1;
     m_used += (size_t)ret; //记录读取了多少字节
     //TODO: 解析数据
-    return true;
+    return ret;
 }
 
 int CClient::Send(void* buffer, size_t nSize) {
@@ -193,10 +200,10 @@ int CServer::threadIocp()
     DWORD transferred = 0;
     ULONG_PTR CompletionKey = 0;
     OVERLAPPED* lpOverlapped = NULL;
-    TRACE("into ThreadIocp\r\n");
-    if (GetQueuedCompletionStatus(m_hIOCP, &transferred, &CompletionKey, &lpOverlapped, INFINITY))
+    TRACE("into ThreadIocp, %lu\r\n", GetCurrentThread());
+    if (GetQueuedCompletionStatus(m_hIOCP, &transferred, &CompletionKey, &lpOverlapped, INFINITE))
     {
-        if (transferred > 0 && (CompletionKey != 0)) {
+        if (CompletionKey != 0) { //删去trancferred > 0的条件 能够进入
             COverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, COverlapped, m_overlapped);
             TRACE("pOverlapped->m_operator %d \r\n", pOverlapped->m_operator);
             pOverlapped->m_server = this;

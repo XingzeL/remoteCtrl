@@ -13,13 +13,13 @@ typedef int (ThreadFuncBase::* FUNCTYPE)(); //这里定义FUNCTYPE
 class ThreadWorker {
 public:
 	ThreadWorker() :thiz(NULL), func(NULL) {}
-	ThreadWorker(ThreadFuncBase* obj, FUNCTYPE f) : thiz(obj), func(f) {}
+	ThreadWorker(void* obj, FUNCTYPE f) : thiz((ThreadFuncBase*)obj), func(f) {}
 	ThreadWorker(const ThreadWorker& worker) {
 		thiz = worker.thiz;
 		func = worker.func;
 	}
 
-	ThreadWorker& operator=(const ThreadWorker& worker) {
+	ThreadWorker& operator=(const ThreadWorker&& worker) {
 		if (this != &worker) {
 			thiz = worker.thiz;
 			func = worker.func;
@@ -65,7 +65,7 @@ public:
 		return m_bStatus;
 	}
 
-	bool IsValid() const{
+	bool IsValid() {
 		if (m_hThread == NULL || (m_hThread == INVALID_HANDLE_VALUE)) return false;
 		return WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT;
 	}
@@ -204,6 +204,7 @@ public:
 			}
 		}
 		m_lock.unlock();
+		TRACE("Pool Index: %d\r\n", index);
 		return index;
 	}
 
