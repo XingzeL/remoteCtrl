@@ -181,16 +181,98 @@ void iocp() {
     getchar();
 }
 
-int main() {
+void udp_server()
+{
+
+    printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+    SOCKET sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) {
+        printf("%s(%d):%s ERROR(%d)!!!\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError());
+        return;
+    }
+    std::list<sockaddr_in>lstclients;
+    sockaddr_in server, client;
+    memset(&server, 0, sizeof(server));
+    memset(&client, 0, sizeof(client));
+    server.sin_family = AF_INET;
+    server.sin_port = htons(20000); //UDP端口尽量设置的大一些 10000以上  
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    if (-1 == bind(sock, (sockaddr*)&server, sizeof(server))) {
+        printf("%s(%d):%s ERROR(%d)!!!\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError());
+        closesocket(sock);
+        return;
+    }
+    char buf[4096] = "";
+    int len = 0;
+    int ret = 0;
+    while (!_kbhit()) {
+        ret = recvfrom(sock, buf, sizeof(buf), 0, (sockaddr*)&client, &len);
+        if (ret > 0) {
+            lstclients.push_back(client);
+            Cutils::Dump((BYTE*)buf, ret);
+            printf("%s(%d):%s ip %08X port %d\r\n", __FILE__, __LINE__, __FUNCTION__, client.sin_addr.s_addr, client.sin_port);
+            ret = sendto(sock, buf, ret, 0, (sockaddr*)&client, len);
+            printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+        }
+        else {
+            printf("%s(%d):%s ERROR(%d)!!! ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError(), ret);
+        }
+    }
+    closesocket(sock);
+    printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+
+}
+void udp_client(bool ishost)
+{
+    Sleep(2000);
+    sockaddr_in server, client;
+    int len = 0;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(20000); //UDP端口尽量设置的大一些 10000以上  
+    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    SOCKET sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) {
+        printf("%s(%d):%s ERROR!!!\r\n", __FILE__, __LINE__, __FUNCTION__);
+        return;
+    }
+    if (ishost) { //主客户端代码
+        printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+        std::string msg = "hello world!\n";
+        int ret = sendto(sock, msg.c_str(), msg.size(), 0, (sockaddr*)&server, sizeof(server));
+        printf("%s(%d):%s ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, ret);
+        if (ret > 0) {
+            ret = recvfrom(sock, (char*)msg.c_str(), msg.size(), 0, (sockaddr*)&client, &len);
+            printf("%s(%d):%s ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, ret);
+            if (ret > 0) {
+                printf("%s(%d):%s ip %08X port %d\r\n", __FILE__, __LINE__, __FUNCTION__, client.sin_addr.s_addr, client.sin_port);
+            }
+        }
+    }
+    else {//从客户端代码
+        printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+    }
+}
+
+int main(int argc, TCHAR* argv[]) {
     if (!Cutils::Init()) return 1;
     
-    /*for (int i = 0; i < 100; ++i) {
-        test();
-    }*/
-    
-    iocp();
-    getchar();
-    ::exit(0); //推送
+    if (argc == 1) { //创建一个子进程，带一个参数1，里面创建一个子进程2
+        TCHAR wstrDir[MAX_PATH];
+        GetCurrentDirectory(MAX_PATH, wstrDir);
+        STARTUPINFO si;
+        PROCESS_INFORMATION pi;
+        wstring strCmd = argv[0];
+        strCmd += L"1";
+        BOOL bRet = CreateProcess(NULL, (LPWSTR)strCmd.c_str(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL,
+            wstrDir, &si, &pi);
+        if (bRet) {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            TRACE("进程ID：%d\r\n", pi.dwProcessId);
+            TRACE("线程ID: %d\r\n", pi.dwThreadId);
+        }
+        strCmd += L"2";
+    }
     
     //一个粗糙但是结构清晰的IOCP
     
