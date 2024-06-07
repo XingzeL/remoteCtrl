@@ -181,44 +181,71 @@ void iocp() {
     getchar();
 }
 
+/*
+    udp穿透需要3个进程参与
+    udp：整个过程都是操作自己的套接字，没有操作过client的。recvfrom的时候会拿到udp的地址，sendto的时候填写地址
+    与请求协议不兼容的地址？ —— message承载的地址
+    服务端需要bind，能够让别让人连上来。 当一个客户端发完之后第一次recvfrom：收到客户端的响应；第二次recvfrom：等待其他客户端的连接
+    */
+/*
+  udp的问题就是没有应答，有时候需要应答来确定操作的有效性
+*/
+
+/*设计：
+ 1. 易用性
+    a.参数适配：让对象能够直接当作参数传入不用强行转换
+
+*/
+
+#include "USocket.h"
 void udp_server()
 {
 
     printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
-    SOCKET sock = socket(PF_INET, SOCK_DGRAM, 0);
-    if (sock == INVALID_SOCKET) {
+
+    CUSOCKT sock(new CUSocket(PTYPE::UTypeUDP));
+    if (*sock == INVALID_SOCKET) {
         printf("%s(%d):%s ERROR(%d)!!!\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError());
         return;
     }
-    std::list<sockaddr_in>lstclients;
-    sockaddr_in server, client;
-    memset(&server, 0, sizeof(server));
-    memset(&client, 0, sizeof(client));
-    server.sin_family = AF_INET;
-    server.sin_port = htons(20000); //UDP端口尽量设置的大一些 10000以上  
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
-    if (-1 == bind(sock, (sockaddr*)&server, sizeof(server))) {
+    std::list<CUSockaddrIn>lstclients;
+     
+    CUSockaddrIn client;
+    
+    if (-1 == sock->bind("127.0.0.1", 20000)) {
         printf("%s(%d):%s ERROR(%d)!!!\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError());
-        closesocket(sock);
         return;
     }
-    char buf[4096] = "";
-    int len = 0;
+    CBuffer buf(1024*256);
+    int len = sizeof(client);
     int ret = 0;
     while (!_kbhit()) {
-        ret = recvfrom(sock, buf, sizeof(buf), 0, (sockaddr*)&client, &len);
+        ret = sock->recvfrom(buf, client);
+        //ret = recvfrom(*sock, (char*)buf.c_str(), buf.size(), 0, client, &len);
+        /*
+        * 简化参数方法：用operator重载的方法
+        *   第5个参数：以下的operator sockaddr*() const对应对象在传入参数类型为sockaddr* 时候能够直接将对象传入
+            	operator sockaddr* () const { //使得可以直接将对象传参数而不用(sockaddr*)强制转换
+		            return (sockaddr*)&m_addr;
+	            }
+        */
         if (ret > 0) {
-            lstclients.push_back(client);
-            Cutils::Dump((BYTE*)buf, ret);
-            printf("%s(%d):%s ip %08X port %d\r\n", __FILE__, __LINE__, __FUNCTION__, client.sin_addr.s_addr, client.sin_port);
-            ret = sendto(sock, buf, ret, 0, (sockaddr*)&client, len);
-            printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+            if (lstclients.size() <= 0) {
+                lstclients.push_back(client);
+                printf("%s(%d):%s ip %08X port %d\r\n", __FILE__, __LINE__, __FUNCTION__, client.GetIP().c_str(), client.GetPort());
+                ret = sock->sendto(buf, client);
+                printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+            }
+            else {
+                buf.Update((void*)&lstclients.front(), lstclients.front().size());
+                ret = sock->sendto(buf, client);
+                printf("%s(%d):%s ERROR(%d)!!! ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError(), ret);
+
+            }
         }
-        else {
-            printf("%s(%d):%s ERROR(%d)!!! ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, WSAGetLastError(), ret);
-        }
+
     }
-    closesocket(sock);
+    closesocket(*sock);
     printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
 
 }
@@ -237,7 +264,8 @@ void udp_client(bool ishost)
     }
     if (ishost) { //主客户端代码
         printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
-        std::string msg = "hello world!\n";
+        //std::string msg = "hello world!\n";
+        CBuffer msg = "hello world\n";
         int ret = sendto(sock, msg.c_str(), msg.size(), 0, (sockaddr*)&server, sizeof(server));
         printf("%s(%d):%s ret = %d\r\n", __FILE__, __LINE__, __FUNCTION__, ret);
         if (ret > 0) {
