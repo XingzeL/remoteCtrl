@@ -68,7 +68,7 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClose,
 	//} //第一次发现没有消息处理线程的话就创建一个
 	UINT nMode = isAutoClose ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
-	pack.Data(strOut);
+	pack.Data(strOut); //返回一个const， 且不会改变packet的内容
 	//有消息接收线程：发送给对应的线程号对应的消息和包，目前只发WM_SEND_PACK消息，包不一样，得到的响应就不同，对应不同响应会再OnSendPacketAck中对号入座(使用switch-case)
 	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam);
 	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)pData,(LPARAM)hWnd);
