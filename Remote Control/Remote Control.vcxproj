@@ -147,6 +147,7 @@
     <ClInclude Include="CThread.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="LockDialog.h" />
+    <ClInclude Include="Network.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Remote Control.h" />
@@ -161,6 +162,7 @@
     <ClCompile Include="CSafeQueue.cpp" />
     <ClCompile Include="CServer.cpp" />
     <ClCompile Include="LockDialog.cpp" />
+    <ClCompile Include="Network.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

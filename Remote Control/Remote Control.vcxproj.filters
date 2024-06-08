@@ -57,6 +57,9 @@
     <ClInclude Include="USocket.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Network.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RemoteControl.cpp">
@@ -84,6 +87,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="USocket.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Network.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
